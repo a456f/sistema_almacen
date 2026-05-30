@@ -51,9 +51,9 @@ router.get('/', async (req, res) => {
   const where = [];
   const params = [];
   if (search) {
-    where.push('(c.numero_caja LIKE ? OR c.marca LIKE ? OR c.modelo LIKE ? OR c.descripcion LIKE ? OR c.tipo LIKE ?)');
+    where.push('(c.numero_caja LIKE ? OR c.numero_serie LIKE ? OR c.marca LIKE ? OR c.modelo LIKE ? OR c.descripcion LIKE ? OR c.tipo LIKE ?)');
     const like = `%${search}%`;
-    params.push(like, like, like, like, like);
+    params.push(like, like, like, like, like, like);
   }
   if (categoria) {
     where.push('c.categoria_id = ?');
@@ -82,15 +82,15 @@ router.get('/', async (req, res) => {
 
 // ── Crear caja ──
 router.post('/', async (req, res) => {
-  const { numero_caja, cantidad, marca, modelo, descripcion, tipo, uso, caracteristicas, categoria_id } = req.body;
+  const { numero_caja, numero_serie, cantidad, marca, modelo, descripcion, tipo, uso, caracteristicas, categoria_id } = req.body;
   if (!numero_caja) {
     return res.status(400).json({ error: 'El número de caja es obligatorio.' });
   }
   try {
     const [result] = await db.query(
-      `INSERT INTO cajas (numero_caja, cantidad, marca, modelo, descripcion, tipo, uso, caracteristicas, categoria_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [numero_caja, cantidad || 0, marca || null, modelo || null, descripcion || null,
+      `INSERT INTO cajas (numero_caja, numero_serie, cantidad, marca, modelo, descripcion, tipo, uso, caracteristicas, categoria_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [numero_caja, numero_serie || null, cantidad || 0, marca || null, modelo || null, descripcion || null,
        tipo || null, uso || null, caracteristicas || null, categoria_id || null]
     );
     res.status(201).json({ message: 'Caja registrada.', id: result.insertId });
@@ -101,15 +101,15 @@ router.post('/', async (req, res) => {
 
 // ── Editar caja ──
 router.put('/:id', async (req, res) => {
-  const { numero_caja, cantidad, marca, modelo, descripcion, tipo, uso, caracteristicas, categoria_id } = req.body;
+  const { numero_caja, numero_serie, cantidad, marca, modelo, descripcion, tipo, uso, caracteristicas, categoria_id } = req.body;
   if (!numero_caja) {
     return res.status(400).json({ error: 'El número de caja es obligatorio.' });
   }
   try {
     await db.query(
-      `UPDATE cajas SET numero_caja=?, cantidad=?, marca=?, modelo=?, descripcion=?, tipo=?, uso=?, caracteristicas=?, categoria_id=?, fecha_actualizacion=NOW()
+      `UPDATE cajas SET numero_caja=?, numero_serie=?, cantidad=?, marca=?, modelo=?, descripcion=?, tipo=?, uso=?, caracteristicas=?, categoria_id=?, fecha_actualizacion=NOW()
        WHERE id=?`,
-      [numero_caja, cantidad || 0, marca || null, modelo || null, descripcion || null,
+      [numero_caja, numero_serie || null, cantidad || 0, marca || null, modelo || null, descripcion || null,
        tipo || null, uso || null, caracteristicas || null, categoria_id || null, req.params.id]
     );
     res.json({ message: 'Caja actualizada.' });

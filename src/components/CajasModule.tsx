@@ -6,6 +6,7 @@ interface Categoria { id: number; nombre: string; color: string; }
 interface Caja {
   id: number;
   numero_caja: string;
+  numero_serie: string | null;
   cantidad: number;
   marca: string | null;
   modelo: string | null;
@@ -24,7 +25,7 @@ interface Stats {
 }
 
 const emptyForm = {
-  numero_caja: '', cantidad: 0, marca: '', modelo: '', descripcion: '',
+  numero_caja: '', numero_serie: '', cantidad: 0, marca: '', modelo: '', descripcion: '',
   tipo: '', uso: '', caracteristicas: '', categoria_id: '' as string | number,
 };
 
@@ -85,7 +86,7 @@ const CajasModule = () => {
   const abrirEditar = (c: Caja) => {
     setEditingId(c.id);
     setForm({
-      numero_caja: c.numero_caja, cantidad: c.cantidad, marca: c.marca || '', modelo: c.modelo || '',
+      numero_caja: c.numero_caja, numero_serie: c.numero_serie || '', cantidad: c.cantidad, marca: c.marca || '', modelo: c.modelo || '',
       descripcion: c.descripcion || '', tipo: c.tipo || '', uso: c.uso || '',
       caracteristicas: c.caracteristicas || '', categoria_id: c.categoria_id || '',
     });
@@ -160,15 +161,16 @@ const CajasModule = () => {
         <table className="cajas-table">
           <thead>
             <tr>
-              <th>N° Caja</th><th>Cant.</th><th>Marca</th><th>Modelo</th><th>Tipo</th><th>Categoría</th><th></th>
+              <th>N° Caja</th><th>S/N</th><th>Cant.</th><th>Marca</th><th>Modelo</th><th>Tipo</th><th>Categoría</th><th></th>
             </tr>
           </thead>
           <tbody>
             {cajas.length === 0 ? (
-              <tr><td colSpan={7} className="cajas-empty">No hay cajas que coincidan</td></tr>
+              <tr><td colSpan={8} className="cajas-empty">No hay cajas que coincidan</td></tr>
             ) : cajas.map((c) => (
               <tr key={c.id} onClick={() => setDetalle(c)}>
                 <td><code>{c.numero_caja}</code></td>
+                <td>{c.numero_serie ? <code style={{ background: '#f0fdf4', color: '#15803d' }}>{c.numero_serie}</code> : <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
                 <td><span className="cajas-qty">{c.cantidad}</span></td>
                 <td>{c.marca || '—'}</td>
                 <td>{c.modelo || '—'}</td>
@@ -209,6 +211,7 @@ const CajasModule = () => {
               <div className="cajas-form-grid">
                 <label><span>N° de caja *</span><input value={form.numero_caja} onChange={(e) => setForm({ ...form, numero_caja: e.target.value })} required /></label>
                 <label><span>Cantidad</span><input type="number" min={0} value={form.cantidad} onChange={(e) => setForm({ ...form, cantidad: Number(e.target.value) })} /></label>
+                <label className="full"><span>N° de serie (S/N)</span><input placeholder="Escanea o escribe el S/N del producto" value={form.numero_serie} onChange={(e) => setForm({ ...form, numero_serie: e.target.value })} /></label>
                 <label><span>Marca</span><input value={form.marca} onChange={(e) => setForm({ ...form, marca: e.target.value })} /></label>
                 <label><span>Modelo</span><input value={form.modelo} onChange={(e) => setForm({ ...form, modelo: e.target.value })} /></label>
                 <label className="full"><span>Categoría</span>
@@ -241,6 +244,7 @@ const CajasModule = () => {
             </div>
             <div className="cajas-detalle">
               {detalle.categoria_nombre && <span className="cajas-badge" style={{ background: (detalle.categoria_color || '#64748b') + '22', color: detalle.categoria_color || '#334155' }}>{detalle.categoria_nombre}</span>}
+              <Field label="N° de serie" value={detalle.numero_serie} />
               <Field label="Marca" value={detalle.marca} />
               <Field label="Modelo" value={detalle.modelo} />
               <Field label="Tipo" value={detalle.tipo} />

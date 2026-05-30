@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS categorias (
 CREATE TABLE IF NOT EXISTS cajas (
   id INT AUTO_INCREMENT PRIMARY KEY,
   numero_caja VARCHAR(60) NOT NULL,
+  numero_serie VARCHAR(100) NULL,
   cantidad INT DEFAULT 0,
   marca VARCHAR(200),
   modelo VARCHAR(200),
@@ -42,6 +43,7 @@ CREATE TABLE IF NOT EXISTS cajas (
   fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP,
   fecha_actualizacion DATETIME NULL,
   INDEX idx_numero (numero_caja),
+  INDEX idx_serie (numero_serie),
   INDEX idx_categoria (categoria_id),
   CONSTRAINT fk_caja_categoria FOREIGN KEY (categoria_id)
     REFERENCES categorias(id) ON DELETE SET NULL
