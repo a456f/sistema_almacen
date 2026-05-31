@@ -20,7 +20,8 @@ app.use(compression()); // gzip todas las respuestas JSON
 app.use(express.json());
 
 // Servir archivos subidos con cache largo (7 días) — las imágenes no cambian
-app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+// Path RELATIVO (no __dirname) para que coincida con multer que escribe a 'uploads/cajas/' relativo
+app.use('/uploads', express.static('uploads', {
   maxAge: '7d',
   immutable: true,
   etag: true,
