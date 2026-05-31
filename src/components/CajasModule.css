@@ -842,3 +842,17 @@
   .prod-table { font-size: 0.78rem; }
   .prod-tr-tipo { max-width: 120px; }
 }
+
+/* Override: iconos más grandes en las acciones de la tabla de productos */
+.prod-tr-actions button {
+  width: 36px !important;
+  height: 36px !important;
+  margin-left: 5px !important;
+}
+.prod-tr-actions button svg {
+  width: 18px !important;
+  height: 18px !important;
+}
+.prod-tr-actions .prod-hist-btn {
+  font-size: 1.3rem !important;
+}
