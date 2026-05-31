@@ -3,6 +3,7 @@ import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
 import { db } from '../db.js';
+import { autoCatalogar } from './catalogosRoutes.js';
 
 const router = express.Router();
 
@@ -45,24 +46,35 @@ const fetchImagenes = async (productoId) => {
   return imgs;
 };
 
-// ── Listar productos de una caja (paginado) ──
+// ── Listar productos de una caja (paginado + filtro por fecha + estado) ──
 router.get('/caja/:cajaId', async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);
   const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 10));
   const offset = (page - 1) * limit;
+  const fechaDesde = (req.query.fecha_desde || '').trim();
+  const fechaHasta = (req.query.fecha_hasta || '').trim();
+  const estado = (req.query.estado || '').trim();
+
+  const where = ['p.caja_id = ?'];
+  const params = [req.params.cajaId];
+  if (fechaDesde) { where.push('p.fecha_registro >= ?'); params.push(`${fechaDesde} 00:00:00`); }
+  if (fechaHasta) { where.push('p.fecha_registro <= ?'); params.push(`${fechaHasta} 23:59:59`); }
+  if (estado)     { where.push('p.estado = ?'); params.push(estado); }
+  const whereSql = `WHERE ${where.join(' AND ')}`;
+
   try {
     const [[{ total }]] = await db.query(
-      'SELECT COUNT(*) AS total FROM productos WHERE caja_id = ?',
-      [req.params.cajaId]
+      `SELECT COUNT(*) AS total FROM productos p ${whereSql}`,
+      params
     );
     const [productos] = await db.query(
       `SELECT p.*, cat.nombre AS categoria_nombre, cat.color AS categoria_color
        FROM productos p
        LEFT JOIN categorias cat ON cat.id = p.categoria_id
-       WHERE p.caja_id = ?
+       ${whereSql}
        ORDER BY p.id DESC
        LIMIT ? OFFSET ?`,
-      [req.params.cajaId, limit, offset]
+      [...params, limit, offset]
     );
     const conImagenes = await Promise.all(
       productos.map(async (p) => ({ ...p, imagenes: await fetchImagenes(p.id) }))
@@ -129,6 +141,7 @@ router.post('/', uploadProd.array('fotos', 6), async (req, res) => {
        nombre, numero_serie || null, validarEstado(estado)]
     );
     const productoId = r.insertId;
+    autoCatalogar({ marca, modelo, tipo });
 
     const archivos = req.files || [];
     if (archivos.length > 0) {

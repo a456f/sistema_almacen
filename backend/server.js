@@ -8,6 +8,7 @@ import { db } from './db.js';
 import authRoutes from './routes/authRoutes.js';
 import cajasRoutes from './routes/cajasRoutes.js';
 import productosRoutes from './routes/productosRoutes.js';
+import catalogosRoutes from './routes/catalogosRoutes.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '.env') });
@@ -39,6 +40,7 @@ app.get('/api/test', async (_req, res) => {
 app.use('/api', authRoutes);
 app.use('/api/cajas', cajasRoutes);
 app.use('/api/productos', productosRoutes);
+app.use('/api/catalogos', catalogosRoutes);
 
 app.listen(PORT, () => {
   console.log(`\n🚀 Sistema de Inventario - backend escuchando en http://localhost:${PORT}`);

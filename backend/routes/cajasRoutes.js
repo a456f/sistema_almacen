@@ -4,6 +4,7 @@ import ExcelJS from 'exceljs';
 import fs from 'fs';
 import path from 'path';
 import { db } from '../db.js';
+import { styleSheet } from '../utils/excelStyle.js';
 
 const router = express.Router();
 
@@ -118,9 +119,9 @@ router.get('/export/excel', async (_req, res) => {
       { header: 'Registrada', key: 'fecha_registro', width: 18 },
       { header: 'Actualizada', key: 'fecha_actualizacion', width: 18 },
     ];
-    wsC.getRow(1).eachCell((cell) => Object.assign(cell, headerStyle));
     wsC.addRows(cajas);
     wsC.autoFilter = { from: 'A1', to: 'H1' };
+    styleSheet(wsC, { dateColumns: ['fecha_registro', 'fecha_actualizacion'], stateColumn: 'estado' });
 
     // Hoja 2: Productos
     const wsP = wb.addWorksheet('Productos');
@@ -142,9 +143,9 @@ router.get('/export/excel', async (_req, res) => {
       { header: 'Registrado', key: 'fecha_registro', width: 18 },
       { header: 'Actualizado', key: 'fecha_actualizacion', width: 18 },
     ];
-    wsP.getRow(1).eachCell((cell) => Object.assign(cell, headerStyle));
     wsP.addRows(productos);
     wsP.autoFilter = { from: 'A1', to: 'P1' };
+    styleSheet(wsP, { dateColumns: ['fecha_registro', 'fecha_actualizacion'], stateColumn: 'estado' });
 
     // Hoja 3: Historial
     const wsH = wb.addWorksheet('Historial');
@@ -156,9 +157,9 @@ router.get('/export/excel', async (_req, res) => {
       { header: 'Descripción', key: 'descripcion', width: 50 },
       { header: 'Fecha', key: 'fecha', width: 20 },
     ];
-    wsH.getRow(1).eachCell((cell) => Object.assign(cell, headerStyle));
     wsH.addRows(historial);
     wsH.autoFilter = { from: 'A1', to: 'F1' };
+    styleSheet(wsH, { dateColumns: ['fecha'] });
 
     const fecha = new Date().toISOString().slice(0, 10);
     res.setHeader(
@@ -213,7 +214,6 @@ router.get('/:id/export/excel', async (req, res) => {
       { header: 'Campo', key: 'k', width: 22 },
       { header: 'Valor', key: 'v', width: 60 },
     ];
-    wsR.getRow(1).eachCell((c) => Object.assign(c, headerStyle));
     wsR.addRows([
       { k: 'ID', v: caja.id },
       { k: 'Código QR', v: caja.codigo_qr },
@@ -225,6 +225,7 @@ router.get('/:id/export/excel', async (req, res) => {
       { k: 'Actualizada', v: caja.fecha_actualizacion || '' },
     ]);
     wsR.getColumn('k').font = { bold: true };
+    styleSheet(wsR, { headerColor: 'FF1D4ED8' });
 
     // Hoja 2: Productos de esta caja
     const wsP = wb.addWorksheet('Productos');
@@ -245,9 +246,9 @@ router.get('/:id/export/excel', async (req, res) => {
       { header: 'Registrado', key: 'fecha_registro', width: 18 },
       { header: 'Actualizado', key: 'fecha_actualizacion', width: 18 },
     ];
-    wsP.getRow(1).eachCell((c) => Object.assign(c, headerStyle));
     wsP.addRows(productos);
     wsP.autoFilter = { from: 'A1', to: 'O1' };
+    styleSheet(wsP, { dateColumns: ['fecha_registro', 'fecha_actualizacion'], stateColumn: 'estado' });
 
     // Hoja 3: Historial completo (caja + sus productos)
     const wsH = wb.addWorksheet('Historial');
@@ -256,9 +257,9 @@ router.get('/:id/export/excel', async (req, res) => {
       { header: 'Descripción', key: 'descripcion', width: 60 },
       { header: 'Fecha', key: 'fecha', width: 20 },
     ];
-    wsH.getRow(1).eachCell((c) => Object.assign(c, headerStyle));
     wsH.addRows(historial);
     wsH.autoFilter = { from: 'A1', to: 'C1' };
+    styleSheet(wsH, { dateColumns: ['fecha'] });
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${caja.codigo_qr}_detalle.xlsx"`);

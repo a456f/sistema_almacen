@@ -114,6 +114,13 @@ const CajasModule = () => {
   const [prodImgs, setProdImgs] = useState<File[]>([]);
   const [verMasDetalles, setVerMasDetalles] = useState(false);
   const [prodEditingId, setProdEditingId] = useState<number | null>(null);
+  // Catálogos (marcas, modelos, tipos)
+  const [marcas, setMarcas] = useState<{ id: number; nombre: string }[]>([]);
+  const [modelos, setModelos] = useState<{ id: number; nombre: string }[]>([]);
+  const [tipos, setTipos] = useState<{ id: number; nombre: string }[]>([]);
+  const [catModal, setCatModal] = useState(false);
+  const [catTab, setCatTab] = useState<'marcas' | 'modelos' | 'tipos'>('marcas');
+  const [catNuevo, setCatNuevo] = useState('');
 
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
   const [confirmar, setConfirmar] = useState<{
@@ -154,6 +161,44 @@ const CajasModule = () => {
     } catch {}
   }, []);
 
+  const cargarCatalogos = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/catalogos`);
+      if (res.ok) {
+        const d = await res.json();
+        setMarcas(d.marcas || []);
+        setModelos(d.modelos || []);
+        setTipos(d.tipos || []);
+      }
+    } catch {}
+  }, []);
+
+  const agregarCat = async (cat: 'marcas' | 'modelos' | 'tipos', nombre: string) => {
+    if (!nombre.trim()) return;
+    try {
+      const res = await fetch(`${API_URL}/catalogos/${cat}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre: nombre.trim() }),
+      });
+      if (res.ok) {
+        cargarCatalogos();
+        notify(`${cat.slice(0,-1).charAt(0).toUpperCase()}${cat.slice(1,-1)} agregado`);
+      }
+    } catch {}
+  };
+
+  const eliminarCat = (cat: 'marcas' | 'modelos' | 'tipos', id: number, nombre: string) => pedirConfirm(
+    'Eliminar',
+    `¿Eliminar "${nombre}" del catálogo de ${cat}? Los productos que lo usen mantienen el valor.`,
+    async () => {
+      try {
+        const res = await fetch(`${API_URL}/catalogos/${cat}/${id}`, { method: 'DELETE' });
+        if (res.ok) { cargarCatalogos(); notify('Eliminado'); }
+      } catch {}
+    }
+  );
+
   const cargarStats = useCallback(async () => {
     try {
       const res = await fetch(`${API_URL}/cajas/stats`);
@@ -161,7 +206,7 @@ const CajasModule = () => {
     } catch {}
   }, []);
 
-  useEffect(() => { cargarCategorias(); }, [cargarCategorias]);
+  useEffect(() => { cargarCategorias(); cargarCatalogos(); }, [cargarCategorias, cargarCatalogos]);
   useEffect(() => { cargarCajas(); }, [cargarCajas]);
   useEffect(() => { cargarStats(); }, [cargarStats]);
   useEffect(() => { setPage(1); }, [search, filtroEstado]);
@@ -349,6 +394,7 @@ const CajasModule = () => {
       if (!res.ok) throw new Error(data.error || 'No se pudo guardar');
       setProdModal(false);
       notify(isEdit ? 'Producto actualizado' : 'Producto registrado');
+      cargarCatalogos();
       cargarProductosCaja(detalleCaja.id, productosPage);
       cargarCajas(); cargarStats();
     } catch (err: any) { notify(err.message, 'err'); }
@@ -440,6 +486,7 @@ const CajasModule = () => {
           {ESTADOS_CAJA.map((e) => <option key={e} value={e}>{e.replace('_', ' ')}</option>)}
         </select>
         <button className="cajas-add" onClick={abrirNuevaCaja}>{Icon.plus} Nueva caja</button>
+        <button className="cajas-add" style={{ background: 'linear-gradient(135deg, #6366f1, #4f46e5)' }} onClick={() => { setCatModal(true); cargarCatalogos(); }}>📋 Catálogos</button>
         <a className="cajas-export" href={`${BASE_URL}/api/cajas/export/excel`} target="_blank" rel="noopener noreferrer" title="Descargar Excel">{Icon.download} Excel</a>
       </div>
 
@@ -734,13 +781,16 @@ const CajasModule = () => {
                     <input type="number" min={1} value={prodForm.cantidad} onChange={(e) => setProdForm({ ...prodForm, cantidad: Number(e.target.value) })} />
                   </label>
                   <label><span>Marca</span>
-                    <input value={prodForm.marca} onChange={(e) => setProdForm({ ...prodForm, marca: e.target.value })} />
+                    <input list="cat-marcas" placeholder="Selecciona o escribe" value={prodForm.marca} onChange={(e) => setProdForm({ ...prodForm, marca: e.target.value })} />
+                    <datalist id="cat-marcas">{marcas.map(m => <option key={m.id} value={m.nombre} />)}</datalist>
                   </label>
                   <label><span>Modelo</span>
-                    <input value={prodForm.modelo} onChange={(e) => setProdForm({ ...prodForm, modelo: e.target.value })} />
+                    <input list="cat-modelos" placeholder="Selecciona o escribe" value={prodForm.modelo} onChange={(e) => setProdForm({ ...prodForm, modelo: e.target.value })} />
+                    <datalist id="cat-modelos">{modelos.map(m => <option key={m.id} value={m.nombre} />)}</datalist>
                   </label>
                   <label><span>Tipo</span>
-                    <input value={prodForm.tipo} onChange={(e) => setProdForm({ ...prodForm, tipo: e.target.value })} />
+                    <input list="cat-tipos" placeholder="Selecciona o escribe" value={prodForm.tipo} onChange={(e) => setProdForm({ ...prodForm, tipo: e.target.value })} />
+                    <datalist id="cat-tipos">{tipos.map(t => <option key={t.id} value={t.nombre} />)}</datalist>
                   </label>
                   <label className="full"><span>Descripción</span>
                     <textarea rows={2} value={prodForm.descripcion} onChange={(e) => setProdForm({ ...prodForm, descripcion: e.target.value })} />
@@ -792,6 +842,47 @@ const CajasModule = () => {
             disabled={viewer.index === viewer.urls.length - 1}
             onClick={(e) => { e.stopPropagation(); setViewer({ ...viewer, index: Math.min(viewer.urls.length - 1, viewer.index + 1) }); }}
           >›</button>
+        </div>
+      )}
+
+      {/* Modal Gestionar Catálogos */}
+      {catModal && (
+        <div className="cajas-overlay" onClick={() => setCatModal(false)}>
+          <div className="cajas-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="cajas-modal-head">
+              <h3>Catálogos · Marcas / Modelos / Tipos</h3>
+              <button onClick={() => setCatModal(false)}>{Icon.close}</button>
+            </div>
+            <div className="cat-tabs">
+              {(['marcas','modelos','tipos'] as const).map(t => (
+                <button key={t} className={`cat-tab ${catTab === t ? 'active' : ''}`} onClick={() => setCatTab(t)}>
+                  {t.charAt(0).toUpperCase() + t.slice(1)} ({(t === 'marcas' ? marcas : t === 'modelos' ? modelos : tipos).length})
+                </button>
+              ))}
+            </div>
+            <div className="cat-body">
+              <div className="cat-add">
+                <input
+                  placeholder={`Nuevo ${catTab.slice(0,-1)}…`}
+                  value={catNuevo}
+                  onChange={(e) => setCatNuevo(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { agregarCat(catTab, catNuevo); setCatNuevo(''); } }}
+                />
+                <button onClick={() => { agregarCat(catTab, catNuevo); setCatNuevo(''); }}>{Icon.plus} Agregar</button>
+              </div>
+              <ul className="cat-list">
+                {(catTab === 'marcas' ? marcas : catTab === 'modelos' ? modelos : tipos).map((item) => (
+                  <li key={item.id} className="cat-item">
+                    <span>{item.nombre}</span>
+                    <button onClick={() => eliminarCat(catTab, item.id, item.nombre)} title="Eliminar">{Icon.trash}</button>
+                  </li>
+                ))}
+                {(catTab === 'marcas' ? marcas : catTab === 'modelos' ? modelos : tipos).length === 0 && (
+                  <li className="cat-empty">No hay {catTab} registrados</li>
+                )}
+              </ul>
+            </div>
+          </div>
         </div>
       )}
 
