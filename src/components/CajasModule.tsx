@@ -64,7 +64,7 @@ const emptyCajaForm = { codigo_qr: '', estado: 'ACTIVO', detalles: '' };
 const emptyProdForm = {
   nombre: '', numero_serie: '', categoria_id: '' as string | number,
   marca: '', modelo: '', tipo: '', descripcion: '', uso: '', caracteristicas: '',
-  estado: 'ACTIVO', cantidad: 1,
+  estado: 'AGREGADO', cantidad: 1,
 };
 
 const CajasModule = () => {
@@ -112,6 +112,7 @@ const CajasModule = () => {
   const [prodForm, setProdForm] = useState(emptyProdForm);
   const [prodImgs, setProdImgs] = useState<File[]>([]);
   const [verMasDetalles, setVerMasDetalles] = useState(false);
+  const [prodEditingId, setProdEditingId] = useState<number | null>(null);
 
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
   const [confirmar, setConfirmar] = useState<{
@@ -290,14 +291,35 @@ const CajasModule = () => {
   const recargarDetalle = () => detalleCaja && abrirDetalle(detalleCaja.id);
 
   const abrirNuevoProducto = () => {
+    setProdEditingId(null);
     setProdForm(emptyProdForm); setProdImgs([]); setVerMasDetalles(false); setProdModal(true);
+  };
+
+  const abrirEditarProducto = (p: Producto) => {
+    setProdEditingId(p.id);
+    setProdForm({
+      nombre: p.nombre,
+      numero_serie: p.numero_serie || '',
+      categoria_id: p.categoria_id || '',
+      marca: p.marca || '',
+      modelo: p.modelo || '',
+      tipo: p.tipo || '',
+      descripcion: p.descripcion || '',
+      uso: p.uso || '',
+      caracteristicas: p.caracteristicas || '',
+      estado: p.estado || 'ACTIVO',
+      cantidad: p.cantidad || 1,
+    });
+    setProdImgs([]);
+    setVerMasDetalles(true); // al editar, abrir 'más detalles' por defecto
+    setProdModal(true);
   };
   const guardarProducto = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!detalleCaja) return;
     if (prodImgs.length > 6) { notify('Máximo 6 fotos', 'err'); return; }
-    // Aviso suave si tiene menos de 3 fotos pero no bloqueamos
-    if (prodImgs.length > 0 && prodImgs.length < 3) {
+    // Aviso suave si tiene menos de 3 fotos (solo al CREAR, no al editar)
+    if (!prodEditingId && prodImgs.length > 0 && prodImgs.length < 3) {
       pedirConfirm(
         'Pocas fotos',
         `Se recomiendan al menos 3 fotos del producto. Subiste ${prodImgs.length}. ¿Continuar de todas formas?`,
@@ -311,19 +333,22 @@ const CajasModule = () => {
 
   const continuarGuardarProducto = async () => {
     if (!detalleCaja) return;
+    const isEdit = prodEditingId != null;
+    const url = isEdit ? `${API_URL}/productos/${prodEditingId}` : `${API_URL}/productos`;
+    const method = isEdit ? 'PUT' : 'POST';
 
     const fd = new FormData();
-    fd.append('caja_id', String(detalleCaja.id));
+    if (!isEdit) fd.append('caja_id', String(detalleCaja.id));
     Object.entries(prodForm).forEach(([k, v]) => fd.append(k, String(v ?? '')));
     prodImgs.forEach((f) => fd.append('fotos', f));
 
     try {
-      const res = await fetch(`${API_URL}/productos`, { method: 'POST', body: fd });
+      const res = await fetch(url, { method, body: fd });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'No se pudo guardar');
       setProdModal(false);
-      notify('Producto registrado');
-      if (detalleCaja) cargarProductosCaja(detalleCaja.id, 1);
+      notify(isEdit ? 'Producto actualizado' : 'Producto registrado');
+      cargarProductosCaja(detalleCaja.id, productosPage);
       cargarCajas(); cargarStats();
     } catch (err: any) { notify(err.message, 'err'); }
   };
@@ -575,6 +600,9 @@ const CajasModule = () => {
                         {p.numero_serie && <code className="prod-sn">S/N: {p.numero_serie}</code>}
                       </div>
                       <div className="prod-card-actions">
+                        <button className="prod-edit-btn" onClick={() => abrirEditarProducto(p)} title="Ver y editar detalles">
+                          {Icon.edit} Editar
+                        </button>
                         <button className="prod-hist-btn" onClick={() => toggleHistorialProducto(p.id)} title="Ver historial">
                           {prodHistId === p.id ? 'Ocultar' : 'Historial'}
                         </button>
@@ -658,7 +686,7 @@ const CajasModule = () => {
         <div className="cajas-overlay" onClick={() => setProdModal(false)}>
           <div className="cajas-modal wide" onClick={(e) => e.stopPropagation()}>
             <div className="cajas-modal-head">
-              <h3>Nuevo producto en {detalleCaja.codigo_qr}</h3>
+              <h3>{prodEditingId ? 'Editar producto' : 'Nuevo producto'} en {detalleCaja.codigo_qr}</h3>
               <button onClick={() => setProdModal(false)}>{Icon.close}</button>
             </div>
             <form onSubmit={guardarProducto} className="cajas-form">
@@ -718,7 +746,7 @@ const CajasModule = () => {
 
               <div className="cajas-form-actions">
                 <button type="button" onClick={() => setProdModal(false)}>Cancelar</button>
-                <button type="submit" className="primary">Registrar producto</button>
+                <button type="submit" className="primary">{prodEditingId ? 'Guardar cambios' : 'Registrar producto'}</button>
               </div>
             </form>
           </div>
