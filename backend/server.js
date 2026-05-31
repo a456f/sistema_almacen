@@ -1,4 +1,5 @@
 import express from 'express';
+import compression from 'compression';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -15,10 +16,15 @@ const app = express();
 const PORT = Number(process.env.PORT) || 4001;
 
 app.use(cors({ origin: true }));
+app.use(compression()); // gzip todas las respuestas JSON
 app.use(express.json());
 
-// Servir archivos subidos (imágenes de cajas y productos)
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Servir archivos subidos con cache largo (7 días) — las imágenes no cambian
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+  maxAge: '7d',
+  immutable: true,
+  etag: true,
+}));
 
 app.get('/api/test', async (_req, res) => {
   try {

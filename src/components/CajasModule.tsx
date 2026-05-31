@@ -92,6 +92,8 @@ const CajasModule = () => {
   // Historial por producto (uno expandido a la vez)
   const [prodHistId, setProdHistId] = useState<number | null>(null);
   const [prodHist, setProdHist] = useState<HistorialEntry[]>([]);
+  // Cache de detalles ya cargados (para prefetch en hover)
+  const detalleCache = useRef<Map<number, { caja: Caja; hist: HistorialEntry[]; ts: number }>>(new Map());
 
   // Producto
   const [prodModal, setProdModal] = useState(false);
@@ -195,24 +197,53 @@ const CajasModule = () => {
     'Eliminar caja',
     `¿Eliminar la caja ${c.codigo_qr} y todos sus productos? Esta acción no se puede deshacer.`,
     async () => {
+      // Optimistic: quitar del grid de inmediato
+      setCajas((prev) => prev.filter((x) => x.id !== c.id));
       try {
         const res = await fetch(`${API_URL}/cajas/${c.id}`, { method: 'DELETE' });
         if (!res.ok) throw new Error();
         notify('Caja eliminada');
-        cargarCajas(); cargarStats();
-      } catch { notify('No se pudo eliminar', 'err'); }
+        cargarStats();
+      } catch {
+        notify('No se pudo eliminar', 'err');
+        cargarCajas(); // rollback
+      }
     }
   );
 
+  // Prefetch silencioso (al pasar el mouse sobre una caja)
+  const prefetchDetalle = (id: number) => {
+    const c = detalleCache.current.get(id);
+    if (c && Date.now() - c.ts < 30000) return; // cache vivo 30s
+    Promise.all([
+      fetch(`${API_URL}/cajas/${id}`).then(r => r.ok ? r.json() : null),
+      fetch(`${API_URL}/cajas/${id}/historial`).then(r => r.ok ? r.json() : []),
+    ]).then(([caja, hist]) => {
+      if (caja) detalleCache.current.set(id, { caja, hist, ts: Date.now() });
+    }).catch(() => {});
+  };
+
   const abrirDetalle = async (id: number) => {
-    setVerHistorial(false); // colapsado por defecto
+    setVerHistorial(false);
+    // Si tenemos cache fresco, mostramos al instante
+    const cached = detalleCache.current.get(id);
+    if (cached && Date.now() - cached.ts < 30000) {
+      setDetalleCaja(cached.caja);
+      setHistorial(cached.hist);
+      return;
+    }
     try {
       const [resCaja, resHist] = await Promise.all([
         fetch(`${API_URL}/cajas/${id}`),
         fetch(`${API_URL}/cajas/${id}/historial`),
       ]);
-      if (resCaja.ok) setDetalleCaja(await resCaja.json());
-      setHistorial(resHist.ok ? await resHist.json() : []);
+      const caja = resCaja.ok ? await resCaja.json() : null;
+      const hist = resHist.ok ? await resHist.json() : [];
+      if (caja) {
+        setDetalleCaja(caja);
+        setHistorial(hist);
+        detalleCache.current.set(id, { caja, hist, ts: Date.now() });
+      }
     } catch { notify('No se pudo cargar', 'err'); }
   };
 
@@ -252,7 +283,9 @@ const CajasModule = () => {
       if (!res.ok) throw new Error(data.error || 'No se pudo guardar');
       setProdModal(false);
       notify('Producto registrado');
+      // Refrescamos en segundo plano para conseguir las imágenes finales
       recargarDetalle(); cargarCajas(); cargarStats();
+      // (no esperamos a nada — la UI ya se cerró)
     } catch (err: any) { notify(err.message, 'err'); }
   };
 
@@ -260,12 +293,23 @@ const CajasModule = () => {
     'Eliminar producto',
     `¿Eliminar "${p.nombre}"?`,
     async () => {
+      // Optimistic UI: quitar de la lista local antes de la respuesta
+      if (detalleCaja) {
+        setDetalleCaja({
+          ...detalleCaja,
+          productos: (detalleCaja.productos || []).filter(x => x.id !== p.id),
+          cantidad: Math.max(0, detalleCaja.cantidad - p.cantidad),
+        });
+      }
       try {
         const res = await fetch(`${API_URL}/productos/${p.id}`, { method: 'DELETE' });
         if (!res.ok) throw new Error();
         notify('Producto eliminado');
-        recargarDetalle(); cargarCajas(); cargarStats();
-      } catch { notify('No se pudo eliminar', 'err'); }
+        cargarCajas(); cargarStats();
+      } catch {
+        notify('No se pudo eliminar', 'err');
+        recargarDetalle(); // rollback al estado real
+      }
     }
   );
 
@@ -335,7 +379,7 @@ const CajasModule = () => {
         {cajas.length === 0 ? (
           <div className="cajas-empty-grid">No hay cajas registradas</div>
         ) : cajas.map((c) => (
-          <div key={c.id} className="caja-card" onClick={() => abrirDetalle(c.id)}>
+          <div key={c.id} className="caja-card" onMouseEnter={() => prefetchDetalle(c.id)} onClick={() => abrirDetalle(c.id)}>
             <div className="caja-card-img">
               {c.portada
                 ? <img src={fileUrl(c.portada)} alt="" loading="lazy" />
