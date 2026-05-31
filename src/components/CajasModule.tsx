@@ -148,6 +148,7 @@ const CajasModule = () => {
 
   const guardarCaja = async (e: React.FormEvent) => {
     e.preventDefault();
+    const isNew = !cajaEditingId;
     const url = cajaEditingId ? `${API_URL}/cajas/${cajaEditingId}` : `${API_URL}/cajas`;
     const method = cajaEditingId ? 'PUT' : 'POST';
     const fd = new FormData();
@@ -160,8 +161,13 @@ const CajasModule = () => {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'No se pudo guardar');
       setCajaModal(false);
-      notify(cajaEditingId ? 'Caja actualizada' : 'Caja registrada');
+      notify(isNew ? 'Caja registrada · ahora agrega productos' : 'Caja actualizada');
       cargarCajas(); cargarStats();
+      // Si es nueva, abre el detalle y dispara el modal de "agregar producto"
+      if (isNew && data.id) {
+        await abrirDetalle(data.id);
+        abrirNuevoProducto();
+      }
     } catch (err: any) { notify(err.message, 'err'); }
   };
 
