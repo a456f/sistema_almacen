@@ -86,6 +86,8 @@ const CajasModule = () => {
   const [cajaForm, setCajaForm] = useState(emptyCajaForm);
   const [cajaImgs, setCajaImgs] = useState<File[]>([]);
 
+  // Vista: 'lista' (grid de cajas) o 'detalle' (página completa de una caja)
+  const [vista, setVista] = useState<'lista' | 'detalle'>('lista');
   // Detalle caja con productos
   const [detalleCaja, setDetalleCaja] = useState<Caja | null>(null);
   const [historial, setHistorial] = useState<HistorialEntry[]>([]);
@@ -247,8 +249,20 @@ const CajasModule = () => {
     } catch {}
   };
 
+  const volverALista = () => {
+    setVista("lista");
+    setDetalleCaja(null);
+    setProductosCaja([]);
+    setProductosTotal(0);
+    setProductosPage(1);
+    setHistorial([]);
+    window.scrollTo({ top: 0 });
+  };
+
   const abrirDetalle = async (id: number) => {
+    setVista("detalle");
     setVerHistorial(false);
+    window.scrollTo({ top: 0 });
     // Si tenemos cache fresco, mostramos al instante
     const cached = detalleCache.current.get(id);
     if (cached && Date.now() - cached.ts < 30000) {
@@ -371,6 +385,7 @@ const CajasModule = () => {
     <div className="cajas-module">
       {toast && <div className={`cajas-toast ${toast.type}`}>{toast.msg}</div>}
 
+      {vista === 'lista' && (<>
       <div className="cajas-stats">
         <div className="cajas-stat">
           <span>Total cajas</span>
@@ -436,6 +451,7 @@ const CajasModule = () => {
           <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Siguiente</button>
         </div>
       </div>
+      </>)}
 
       {/* Modal CRUD caja */}
       {cajaModal && (
@@ -472,21 +488,21 @@ const CajasModule = () => {
         </div>
       )}
 
-      {/* Detalle de caja */}
-      {detalleCaja && (
-        <div className="cajas-overlay" onClick={() => setDetalleCaja(null)}>
-          <div className="cajas-modal detalle wide" onClick={(e) => e.stopPropagation()}>
-            <div className="cajas-modal-head">
-              <h3>
-                <span className="caja-qr-pill">{Icon.qr} {detalleCaja.codigo_qr}</span>
-                <small style={{ marginLeft: 10 }}>{detalleCaja.cantidad} unidades</small>
-              </h3>
-              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                <a className="cajas-export" style={{ padding: "0.45rem 0.85rem", fontSize: "0.78rem" }} href={`${BASE_URL}/api/cajas/${detalleCaja.id}/export/excel`} target="_blank" rel="noopener noreferrer" title="Descargar esta caja con todos sus productos">{Icon.download} Excel</a>
-                <button onClick={() => setDetalleCaja(null)}>{Icon.close}</button>
-              </div>
-            </div>
-            <div className="cajas-detalle">
+      {/* Detalle de caja (página completa) */}
+      {vista === 'detalle' && detalleCaja && (
+        <div className="caja-page">
+          <div className="caja-page-head">
+            <button className="caja-page-back" onClick={volverALista} title="Volver al listado">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+              Volver
+            </button>
+            <h3>
+              <span className="caja-qr-pill">{Icon.qr} {detalleCaja.codigo_qr}</span>
+              <small style={{ marginLeft: 10 }}>{detalleCaja.cantidad} unidades</small>
+            </h3>
+            <a className="cajas-export" href={`${BASE_URL}/api/cajas/${detalleCaja.id}/export/excel`} target="_blank" rel="noopener noreferrer" title="Descargar esta caja con todos sus productos">{Icon.download} Excel</a>
+          </div>
+          <div className="caja-page-body">
               <div className="caja-imgs-row">
                 {(detalleCaja.imagenes || []).slice(0, 5).map((im, i) => {
                   const urls = (detalleCaja.imagenes || []).map((x) => fileUrl(x.ruta));
@@ -633,7 +649,6 @@ const CajasModule = () => {
                   </ul>
                 )
               )}
-            </div>
           </div>
         </div>
       )}

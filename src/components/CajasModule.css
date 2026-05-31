@@ -687,3 +687,37 @@
   .viewer-arrow { width: 44px; height: 44px; font-size: 1.8rem; }
   .viewer-download { font-size: 0.74rem; padding: 8px 12px; }
 }
+
+/* Página completa de detalle de caja (en vez de modal) */
+.caja-page {
+  background: var(--bg-card);
+  border-radius: 14px;
+  overflow: hidden;
+  animation: fadeIn 0.18s ease;
+}
+.caja-page-head {
+  display: flex; align-items: center; gap: 12px;
+  padding: 1rem 1.4rem;
+  border-bottom: 1px solid var(--border);
+  background: #f8fafc;
+}
+.caja-page-head h3 {
+  font-size: 1.05rem; color: #0f172a;
+  display: flex; align-items: center;
+  flex: 1;
+}
+.caja-page-head h3 small { color: var(--text-muted); font-weight: 500; }
+.caja-page-back {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 0.55rem 0.95rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+}
+.caja-page-back:hover { background: #f1f5f9; }
+.caja-page-body { padding: 1.3rem 1.4rem; }
