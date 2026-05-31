@@ -1,106 +1,94 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { API_URL, BASE_URL } from '../config/api';
 import './CajasModule.css';
 
 interface Categoria { id: number; nombre: string; color: string; }
-interface ImagenProducto { id: number; ruta: string; }
+interface ImagenItem { id: number; ruta: string; }
 interface Producto {
-  id: number;
-  caja_id: number;
-  nombre: string;
-  numero_serie: string | null;
+  id: number; caja_id: number; cantidad: number; nombre: string;
+  numero_serie: string | null; categoria_id: number | null;
+  categoria_nombre?: string | null; categoria_color?: string | null;
+  marca: string | null; modelo: string | null; tipo: string | null;
+  descripcion: string | null; uso: string | null; caracteristicas: string | null;
   estado: string;
-  imagenes?: ImagenProducto[];
+  imagenes?: ImagenItem[];
 }
 interface Caja {
   id: number;
-  numero_caja: string;
+  codigo_qr: string;
   cantidad: number;
-  marca: string | null;
-  modelo: string | null;
-  descripcion: string | null;
-  tipo: string | null;
-  uso: string | null;
-  caracteristicas: string | null;
-  categoria_id: number | null;
-  categoria_nombre: string | null;
-  categoria_color: string | null;
   estado: string;
-  imagen: string | null;
+  detalles: string | null;
+  portada?: string | null;
   total_productos?: number;
+  imagenes?: ImagenItem[];
+  productos?: Producto[];
 }
 interface Stats {
   total_cajas: number;
   total_unidades: number;
-  porCategoria: { nombre: string; color: string; cajas: number; unidades: number }[];
-  porEstado?: { estado: string; total: number }[];
+  porEstado: { estado: string; total: number }[];
+  porCategoria: { nombre: string; color: string; productos: number; unidades: number }[];
 }
 
-const ESTADOS = ['ACTIVO', 'REVISION', 'SUSPENDIDO', 'NO_HABIDO'] as const;
+const ESTADOS_CAJA = ['ACTIVO', 'REVISION', 'SUSPENDIDO', 'NO_HABIDO'] as const;
+const ESTADOS_PROD = ['ACTIVO', 'AGREGADO', 'RETIRADO', 'NO_HABIDO'] as const;
 const ESTADO_COLOR: Record<string, string> = {
-  ACTIVO: '#16a34a',
-  REVISION: '#f59e0b',
-  SUSPENDIDO: '#6b7280',
-  NO_HABIDO: '#dc2626',
+  ACTIVO: '#16a34a', REVISION: '#f59e0b', SUSPENDIDO: '#6b7280',
+  NO_HABIDO: '#dc2626', AGREGADO: '#2563eb', RETIRADO: '#94a3b8',
 };
-
-const fileUrl = (p: string | null) => (p ? `${BASE_URL}/${p}` : '');
+const fileUrl = (p?: string | null) => (p ? `${BASE_URL}/${p}` : '');
 
 const Icon = {
   search: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
   plus: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
   edit: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
-  trash: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>,
+  trash: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>,
   box: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>,
   close: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
   image: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>,
+  qr: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><line x1="14" y1="14" x2="14" y2="17"/><line x1="17" y1="14" x2="17" y2="20"/><line x1="20" y1="14" x2="20" y2="17"/><line x1="14" y1="20" x2="20" y2="20"/></svg>,
 };
 
-const emptyCajaForm = {
-  numero_caja: '', marca: '', modelo: '', descripcion: '',
-  tipo: '', uso: '', caracteristicas: '', categoria_id: '' as string | number,
-  estado: 'ACTIVO',
+const emptyCajaForm = { codigo_qr: '', estado: 'ACTIVO', detalles: '' };
+const emptyProdForm = {
+  nombre: '', numero_serie: '', categoria_id: '' as string | number,
+  marca: '', modelo: '', tipo: '', descripcion: '', uso: '', caracteristicas: '',
+  estado: 'ACTIVO', cantidad: 1,
 };
-const emptyProductoForm = { nombre: '', numero_serie: '', estado: 'ACTIVO' };
 
 const CajasModule = () => {
   const [cajas, setCajas] = useState<Caja[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [search, setSearch] = useState('');
-  const [filtroCat, setFiltroCat] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
 
-  // Modal caja (crear / editar)
+  // Caja
   const [cajaModal, setCajaModal] = useState(false);
   const [cajaEditingId, setCajaEditingId] = useState<number | null>(null);
   const [cajaForm, setCajaForm] = useState(emptyCajaForm);
-  const [cajaImg, setCajaImg] = useState<File | null>(null);
+  const [cajaImgs, setCajaImgs] = useState<File[]>([]);
 
   // Detalle caja con productos
   const [detalleCaja, setDetalleCaja] = useState<Caja | null>(null);
-  const [productos, setProductos] = useState<Producto[]>([]);
 
-  // Modal producto
+  // Producto
   const [prodModal, setProdModal] = useState(false);
-  const [prodForm, setProdForm] = useState(emptyProductoForm);
+  const [prodForm, setProdForm] = useState(emptyProdForm);
   const [prodImgs, setProdImgs] = useState<File[]>([]);
 
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
-  const prodImgInputRef = useRef<HTMLInputElement>(null);
-
   const notify = (msg: string, type: 'ok' | 'err' = 'ok') => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 2800);
+    setToast({ msg, type }); setTimeout(() => setToast(null), 2800);
   };
 
   const cargarCajas = useCallback(async () => {
     const params = new URLSearchParams({
-      page: String(page), limit: '12',
-      search, categoria: filtroCat, estado: filtroEstado,
+      page: String(page), limit: '12', search, estado: filtroEstado,
     });
     try {
       const res = await fetch(`${API_URL}/cajas?${params}`);
@@ -109,42 +97,43 @@ const CajasModule = () => {
         setCajas(data.data); setTotalPages(data.totalPages); setTotal(data.total);
       }
     } catch { notify('Error al cargar cajas', 'err'); }
-  }, [page, search, filtroCat, filtroEstado]);
-
-  const cargarStats = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_URL}/cajas/stats`);
-      if (res.ok) setStats(await res.json());
-    } catch { /* noop */ }
-  }, []);
+  }, [page, search, filtroEstado]);
 
   const cargarCategorias = useCallback(async () => {
     try {
       const res = await fetch(`${API_URL}/cajas/categorias`);
       if (res.ok) setCategorias(await res.json());
-    } catch { /* noop */ }
+    } catch {}
+  }, []);
+
+  const cargarStats = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/cajas/stats`);
+      if (res.ok) setStats(await res.json());
+    } catch {}
   }, []);
 
   useEffect(() => { cargarCategorias(); }, [cargarCategorias]);
   useEffect(() => { cargarCajas(); }, [cargarCajas]);
   useEffect(() => { cargarStats(); }, [cargarStats]);
-  useEffect(() => { setPage(1); }, [search, filtroCat, filtroEstado]);
+  useEffect(() => { setPage(1); }, [search, filtroEstado]);
 
-  const abrirNuevaCaja = () => {
+  const abrirNuevaCaja = async () => {
+    // Sugerir QR automáticamente
+    let qr = '';
+    try {
+      const res = await fetch(`${API_URL}/cajas/siguiente-qr`);
+      if (res.ok) qr = (await res.json()).codigo_qr;
+    } catch {}
     setCajaEditingId(null);
-    setCajaForm(emptyCajaForm);
-    setCajaImg(null);
+    setCajaForm({ ...emptyCajaForm, codigo_qr: qr });
+    setCajaImgs([]);
     setCajaModal(true);
   };
   const abrirEditarCaja = (c: Caja) => {
     setCajaEditingId(c.id);
-    setCajaForm({
-      numero_caja: c.numero_caja, marca: c.marca || '', modelo: c.modelo || '',
-      descripcion: c.descripcion || '', tipo: c.tipo || '', uso: c.uso || '',
-      caracteristicas: c.caracteristicas || '', categoria_id: c.categoria_id || '',
-      estado: c.estado || 'ACTIVO',
-    });
-    setCajaImg(null);
+    setCajaForm({ codigo_qr: c.codigo_qr, estado: c.estado, detalles: c.detalles || '' });
+    setCajaImgs([]);
     setCajaModal(true);
   };
 
@@ -152,11 +141,11 @@ const CajasModule = () => {
     e.preventDefault();
     const url = cajaEditingId ? `${API_URL}/cajas/${cajaEditingId}` : `${API_URL}/cajas`;
     const method = cajaEditingId ? 'PUT' : 'POST';
-
     const fd = new FormData();
-    Object.entries(cajaForm).forEach(([k, v]) => fd.append(k, String(v ?? '')));
-    if (cajaImg) fd.append('imagen', cajaImg);
-
+    fd.append('codigo_qr', cajaForm.codigo_qr);
+    fd.append('estado', cajaForm.estado);
+    fd.append('detalles', cajaForm.detalles);
+    cajaImgs.forEach((f) => fd.append('imagenes', f));
     try {
       const res = await fetch(url, { method, body: fd });
       const data = await res.json();
@@ -168,7 +157,7 @@ const CajasModule = () => {
   };
 
   const eliminarCaja = async (c: Caja) => {
-    if (!window.confirm(`¿Eliminar la caja ${c.numero_caja} y todos sus productos?`)) return;
+    if (!window.confirm(`¿Eliminar la caja ${c.codigo_qr} y todos sus productos?`)) return;
     try {
       const res = await fetch(`${API_URL}/cajas/${c.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error();
@@ -177,28 +166,28 @@ const CajasModule = () => {
     } catch { notify('No se pudo eliminar', 'err'); }
   };
 
-  const abrirDetalle = async (c: Caja) => {
-    setDetalleCaja(c);
+  const abrirDetalle = async (id: number) => {
     try {
-      const res = await fetch(`${API_URL}/productos/caja/${c.id}`);
-      if (res.ok) setProductos(await res.json());
-      else setProductos([]);
-    } catch { setProductos([]); }
+      const res = await fetch(`${API_URL}/cajas/${id}`);
+      if (res.ok) setDetalleCaja(await res.json());
+    } catch { notify('No se pudo cargar', 'err'); }
   };
 
+  const recargarDetalle = () => detalleCaja && abrirDetalle(detalleCaja.id);
+
   const abrirNuevoProducto = () => {
-    setProdForm(emptyProductoForm);
-    setProdImgs([]);
-    setProdModal(true);
+    setProdForm(emptyProdForm); setProdImgs([]); setProdModal(true);
   };
   const guardarProducto = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!detalleCaja) return;
+    if (prodImgs.length > 6) { notify('Máximo 6 fotos', 'err'); return; }
+    if (prodImgs.length > 0 && prodImgs.length < 3
+      && !window.confirm(`Recomendamos al menos 3 fotos. Subiste ${prodImgs.length}. ¿Continuar?`)) return;
+
     const fd = new FormData();
     fd.append('caja_id', String(detalleCaja.id));
-    fd.append('nombre', prodForm.nombre);
-    fd.append('numero_serie', prodForm.numero_serie);
-    fd.append('estado', prodForm.estado);
+    Object.entries(prodForm).forEach(([k, v]) => fd.append(k, String(v ?? '')));
     prodImgs.forEach((f) => fd.append('fotos', f));
 
     try {
@@ -207,26 +196,32 @@ const CajasModule = () => {
       if (!res.ok) throw new Error(data.error || 'No se pudo guardar');
       setProdModal(false);
       notify('Producto registrado');
-      abrirDetalle(detalleCaja); // recarga lista
-      cargarCajas(); cargarStats();
+      recargarDetalle(); cargarCajas(); cargarStats();
     } catch (err: any) { notify(err.message, 'err'); }
   };
 
   const eliminarProducto = async (p: Producto) => {
-    if (!detalleCaja) return;
     if (!window.confirm(`¿Eliminar producto "${p.nombre}"?`)) return;
     try {
       const res = await fetch(`${API_URL}/productos/${p.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error();
       notify('Producto eliminado');
-      abrirDetalle(detalleCaja);
-      cargarCajas(); cargarStats();
+      recargarDetalle(); cargarCajas(); cargarStats();
+    } catch { notify('No se pudo eliminar', 'err'); }
+  };
+
+  const eliminarImagenCaja = async (cajaId: number, imgId: number) => {
+    if (!window.confirm('¿Eliminar esta imagen?')) return;
+    try {
+      const res = await fetch(`${API_URL}/cajas/${cajaId}/imagen/${imgId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error();
+      recargarDetalle();
     } catch { notify('No se pudo eliminar', 'err'); }
   };
 
   const estadoBadge = (estado: string) => (
     <span className="cajas-estado" style={{
-      background: ESTADO_COLOR[estado] + '22',
+      background: (ESTADO_COLOR[estado] || '#64748b') + '22',
       color: ESTADO_COLOR[estado] || '#334155'
     }}>{estado.replace('_', ' ')}</span>
   );
@@ -235,83 +230,62 @@ const CajasModule = () => {
     <div className="cajas-module">
       {toast && <div className={`cajas-toast ${toast.type}`}>{toast.msg}</div>}
 
-      {/* Stats */}
       <div className="cajas-stats">
         <div className="cajas-stat">
-          <span>Total de cajas</span>
+          <span>Total cajas</span>
           <strong>{stats?.total_cajas ?? '—'}</strong>
         </div>
         <div className="cajas-stat">
-          <span>Total de unidades</span>
+          <span>Total unidades</span>
           <strong>{stats?.total_unidades ?? '—'}</strong>
         </div>
-        {stats?.porCategoria.slice(0, 4).map((c) => (
-          <div className="cajas-stat" key={c.nombre} style={{ borderTopColor: c.color }}>
-            <span title={c.nombre}>{c.nombre}</span>
-            <strong>{c.cajas} <em>cajas</em></strong>
+        {stats?.porEstado.map((e) => (
+          <div className="cajas-stat" key={e.estado} style={{ borderTopColor: ESTADO_COLOR[e.estado] || '#64748b' }}>
+            <span>{e.estado.replace('_', ' ')}</span>
+            <strong>{e.total}</strong>
           </div>
         ))}
       </div>
 
-      {/* Toolbar */}
       <div className="cajas-toolbar">
         <div className="cajas-search">
           {Icon.search}
-          <input placeholder="Buscar por código, marca, modelo, S/N o nombre de producto…" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input placeholder="Buscar por QR, marca, modelo, S/N, nombre…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        <select value={filtroCat} onChange={(e) => setFiltroCat(e.target.value)}>
-          <option value="">Todas las categorías</option>
-          {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-        </select>
         <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)}>
           <option value="">Todos los estados</option>
-          {ESTADOS.map((e) => <option key={e} value={e}>{e.replace('_', ' ')}</option>)}
+          {ESTADOS_CAJA.map((e) => <option key={e} value={e}>{e.replace('_', ' ')}</option>)}
         </select>
         <button className="cajas-add" onClick={abrirNuevaCaja}>{Icon.plus} Nueva caja</button>
       </div>
 
-      {/* Tabla */}
-      <div className="cajas-table-wrap">
-        <table className="cajas-table">
-          <thead>
-            <tr>
-              <th></th><th>N° Caja</th><th>Marca</th><th>Modelo</th><th>Tipo</th>
-              <th>Categoría</th><th>Estado</th><th>Cant.</th><th>Prod.</th><th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {cajas.length === 0 ? (
-              <tr><td colSpan={10} className="cajas-empty">No hay cajas que coincidan</td></tr>
-            ) : cajas.map((c) => (
-              <tr key={c.id} onClick={() => abrirDetalle(c)}>
-                <td>
-                  {c.imagen
-                    ? <img src={fileUrl(c.imagen)} alt="" className="cajas-thumb" />
-                    : <div className="cajas-thumb placeholder">{Icon.box}</div>}
-                </td>
-                <td><code>{c.numero_caja}</code></td>
-                <td>{c.marca || '—'}</td>
-                <td>{c.modelo || '—'}</td>
-                <td className="cajas-tipo">{c.tipo || '—'}</td>
-                <td>
-                  {c.categoria_nombre
-                    ? <span className="cajas-badge" style={{ background: (c.categoria_color || '#64748b') + '22', color: c.categoria_color || '#334155' }}>{c.categoria_nombre}</span>
-                    : '—'}
-                </td>
-                <td>{estadoBadge(c.estado)}</td>
-                <td><span className="cajas-qty">{c.cantidad}</span></td>
-                <td>{c.total_productos ?? 0}</td>
-                <td className="cajas-actions" onClick={(e) => e.stopPropagation()}>
-                  <button onClick={() => abrirEditarCaja(c)} title="Editar">{Icon.edit}</button>
-                  <button className="del" onClick={() => eliminarCaja(c)} title="Eliminar">{Icon.trash}</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="cajas-grid">
+        {cajas.length === 0 ? (
+          <div className="cajas-empty-grid">No hay cajas registradas</div>
+        ) : cajas.map((c) => (
+          <div key={c.id} className="caja-card" onClick={() => abrirDetalle(c.id)}>
+            <div className="caja-card-img">
+              {c.portada
+                ? <img src={fileUrl(c.portada)} alt="" />
+                : <div className="caja-card-img-ph">{Icon.box}</div>}
+              <div className="caja-card-estado">{estadoBadge(c.estado)}</div>
+            </div>
+            <div className="caja-card-body">
+              <div className="caja-card-row">
+                <span className="caja-qr-pill">{Icon.qr} {c.codigo_qr}</span>
+                <span className="caja-card-prod">{c.total_productos ?? 0} prod.</span>
+              </div>
+              <div className="caja-card-cant"><strong>{c.cantidad}</strong> <em>unidades</em></div>
+              {c.detalles && <p className="caja-card-detalles">{c.detalles}</p>}
+              <div className="caja-card-actions" onClick={(e) => e.stopPropagation()}>
+                <button onClick={() => abrirEditarCaja(c)} title="Editar">{Icon.edit}</button>
+                <button className="del" onClick={() => eliminarCaja(c)} title="Eliminar">{Icon.trash}</button>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
 
-      {/* Paginación */}
       <div className="cajas-pagination">
         <span>{total} cajas · página {page} de {totalPages}</span>
         <div>
@@ -330,69 +304,68 @@ const CajasModule = () => {
             </div>
             <form onSubmit={guardarCaja} className="cajas-form">
               <div className="cajas-form-grid">
-                <label><span>N° de caja *</span><input value={cajaForm.numero_caja} onChange={(e) => setCajaForm({ ...cajaForm, numero_caja: e.target.value })} required /></label>
-                <label><span>Estado</span>
+                <label className="full"><span>Código QR *</span>
+                  <input value={cajaForm.codigo_qr} onChange={(e) => setCajaForm({ ...cajaForm, codigo_qr: e.target.value })} placeholder="QR-001" required />
+                </label>
+                <label className="full"><span>Estado</span>
                   <select value={cajaForm.estado} onChange={(e) => setCajaForm({ ...cajaForm, estado: e.target.value })}>
-                    {ESTADOS.map((s) => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
+                    {ESTADOS_CAJA.map((s) => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
                   </select>
                 </label>
-                <label><span>Marca</span><input value={cajaForm.marca} onChange={(e) => setCajaForm({ ...cajaForm, marca: e.target.value })} /></label>
-                <label><span>Modelo</span><input value={cajaForm.modelo} onChange={(e) => setCajaForm({ ...cajaForm, modelo: e.target.value })} /></label>
-                <label className="full"><span>Categoría</span>
-                  <select value={cajaForm.categoria_id} onChange={(e) => setCajaForm({ ...cajaForm, categoria_id: e.target.value })}>
-                    <option value="">Sin categoría</option>
-                    {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                  </select>
+                <label className="full"><span>Detalles (opcional)</span>
+                  <textarea rows={3} value={cajaForm.detalles} onChange={(e) => setCajaForm({ ...cajaForm, detalles: e.target.value })} />
                 </label>
-                <label className="full"><span>Imagen (opcional)</span>
-                  <input type="file" accept="image/*" onChange={(e) => setCajaImg(e.target.files?.[0] || null)} />
+                <label className="full"><span>Imágenes (puedes elegir varias)</span>
+                  <input type="file" accept="image/*" multiple onChange={(e) => setCajaImgs(Array.from(e.target.files || []))} />
+                  {cajaImgs.length > 0 && <small>{cajaImgs.length} archivo(s) seleccionados</small>}
                 </label>
-                <label className="full"><span>Descripción</span><textarea rows={2} value={cajaForm.descripcion} onChange={(e) => setCajaForm({ ...cajaForm, descripcion: e.target.value })} /></label>
-                <label className="full"><span>Tipo</span><input value={cajaForm.tipo} onChange={(e) => setCajaForm({ ...cajaForm, tipo: e.target.value })} /></label>
-                <label className="full"><span>Características</span><textarea rows={3} value={cajaForm.caracteristicas} onChange={(e) => setCajaForm({ ...cajaForm, caracteristicas: e.target.value })} /></label>
               </div>
               <div className="cajas-form-actions">
                 <button type="button" onClick={() => setCajaModal(false)}>Cancelar</button>
-                <button type="submit" className="primary">{cajaEditingId ? 'Guardar cambios' : 'Registrar'}</button>
+                <button type="submit" className="primary">{cajaEditingId ? 'Guardar' : 'Registrar'}</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Modal detalle caja con productos */}
+      {/* Detalle de caja */}
       {detalleCaja && (
         <div className="cajas-overlay" onClick={() => setDetalleCaja(null)}>
           <div className="cajas-modal detalle wide" onClick={(e) => e.stopPropagation()}>
             <div className="cajas-modal-head">
-              <h3>{detalleCaja.numero_caja} <small>· {detalleCaja.cantidad} und.</small></h3>
+              <h3>
+                <span className="caja-qr-pill">{Icon.qr} {detalleCaja.codigo_qr}</span>
+                <small style={{ marginLeft: 10 }}>{detalleCaja.cantidad} unidades</small>
+              </h3>
               <button onClick={() => setDetalleCaja(null)}>{Icon.close}</button>
             </div>
             <div className="cajas-detalle">
-              <div className="caja-detalle-top">
-                {detalleCaja.imagen && <img src={fileUrl(detalleCaja.imagen)} alt="" className="caja-img-grande" />}
-                <div className="caja-detalle-info">
-                  {estadoBadge(detalleCaja.estado)}
-                  {detalleCaja.categoria_nombre && <span className="cajas-badge" style={{ background: (detalleCaja.categoria_color || '#64748b') + '22', color: detalleCaja.categoria_color || '#334155' }}>{detalleCaja.categoria_nombre}</span>}
-                  <Field label="Marca" value={detalleCaja.marca} />
-                  <Field label="Modelo" value={detalleCaja.modelo} />
-                  <Field label="Tipo" value={detalleCaja.tipo} />
-                </div>
+              <div className="caja-imgs-row">
+                {(detalleCaja.imagenes || []).map((im) => (
+                  <div key={im.id} className="caja-img-thumb">
+                    <img src={fileUrl(im.ruta)} alt="" />
+                    <button onClick={() => eliminarImagenCaja(detalleCaja.id, im.id)} title="Eliminar imagen">{Icon.close}</button>
+                  </div>
+                ))}
+                {(detalleCaja.imagenes || []).length === 0 && (
+                  <div className="caja-img-ph-grande">{Icon.image} <span>Sin imágenes</span></div>
+                )}
               </div>
 
-              {detalleCaja.descripcion && <Field label="Descripción" value={detalleCaja.descripcion} />}
-              {detalleCaja.caracteristicas && <Field label="Características" value={detalleCaja.caracteristicas} pre />}
+              <div className="caja-detalle-chips">{estadoBadge(detalleCaja.estado)}</div>
+              {detalleCaja.detalles && <Field label="Detalles" value={detalleCaja.detalles} pre />}
 
               <div className="prod-section-head">
-                <h4>Productos ({productos.length})</h4>
+                <h4>Productos ({detalleCaja.productos?.length ?? 0})</h4>
                 <button className="cajas-add small" onClick={abrirNuevoProducto}>{Icon.plus} Agregar producto</button>
               </div>
 
-              {productos.length === 0 ? (
+              {(detalleCaja.productos?.length ?? 0) === 0 ? (
                 <p className="prod-empty">Aún no hay productos en esta caja</p>
               ) : (
                 <div className="prod-list">
-                  {productos.map((p) => (
+                  {detalleCaja.productos!.map((p) => (
                     <div key={p.id} className="prod-card">
                       <div className="prod-imgs">
                         {p.imagenes && p.imagenes.length > 0
@@ -404,7 +377,18 @@ const CajasModule = () => {
                           <strong>{p.nombre}</strong>
                           {estadoBadge(p.estado)}
                         </div>
-                        {p.numero_serie && <code>S/N: {p.numero_serie}</code>}
+                        <div className="prod-meta">
+                          {p.marca && <span><b>Marca:</b> {p.marca}</span>}
+                          {p.modelo && <span><b>Modelo:</b> {p.modelo}</span>}
+                          {p.tipo && <span><b>Tipo:</b> {p.tipo}</span>}
+                          {p.cantidad > 1 && <span><b>Cant.:</b> {p.cantidad}</span>}
+                        </div>
+                        {p.categoria_nombre && (
+                          <span className="cajas-badge" style={{ background: (p.categoria_color || '#64748b') + '22', color: p.categoria_color || '#334155' }}>
+                            {p.categoria_nombre}
+                          </span>
+                        )}
+                        {p.numero_serie && <code className="prod-sn">S/N: {p.numero_serie}</code>}
                       </div>
                       <button className="prod-del" onClick={() => eliminarProducto(p)} title="Eliminar producto">{Icon.trash}</button>
                     </div>
@@ -419,9 +403,9 @@ const CajasModule = () => {
       {/* Modal nuevo producto */}
       {prodModal && detalleCaja && (
         <div className="cajas-overlay" onClick={() => setProdModal(false)}>
-          <div className="cajas-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="cajas-modal wide" onClick={(e) => e.stopPropagation()}>
             <div className="cajas-modal-head">
-              <h3>Nuevo producto en {detalleCaja.numero_caja}</h3>
+              <h3>Nuevo producto en {detalleCaja.codigo_qr}</h3>
               <button onClick={() => setProdModal(false)}>{Icon.close}</button>
             </div>
             <form onSubmit={guardarProducto} className="cajas-form">
@@ -430,17 +414,43 @@ const CajasModule = () => {
                   <input value={prodForm.nombre} onChange={(e) => setProdForm({ ...prodForm, nombre: e.target.value })} required />
                 </label>
                 <label><span>N° de serie (S/N)</span>
-                  <input placeholder="Escanea desde el app" value={prodForm.numero_serie} onChange={(e) => setProdForm({ ...prodForm, numero_serie: e.target.value })} />
+                  <input placeholder="Se escanea desde el app" value={prodForm.numero_serie} onChange={(e) => setProdForm({ ...prodForm, numero_serie: e.target.value })} />
+                </label>
+                <label><span>Cantidad</span>
+                  <input type="number" min={1} value={prodForm.cantidad} onChange={(e) => setProdForm({ ...prodForm, cantidad: Number(e.target.value) })} />
+                </label>
+                <label><span>Categoría</span>
+                  <select value={prodForm.categoria_id} onChange={(e) => setProdForm({ ...prodForm, categoria_id: e.target.value })}>
+                    <option value="">Sin categoría</option>
+                    {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                  </select>
                 </label>
                 <label><span>Estado</span>
                   <select value={prodForm.estado} onChange={(e) => setProdForm({ ...prodForm, estado: e.target.value })}>
-                    {ESTADOS.map((s) => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
+                    {ESTADOS_PROD.map((s) => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
                   </select>
                 </label>
-                <label className="full"><span>Imágenes (puedes elegir varias)</span>
-                  <input ref={prodImgInputRef} type="file" accept="image/*" multiple
-                    onChange={(e) => setProdImgs(Array.from(e.target.files || []))} />
-                  {prodImgs.length > 0 && <small>{prodImgs.length} archivo(s) seleccionados</small>}
+                <label><span>Marca</span>
+                  <input value={prodForm.marca} onChange={(e) => setProdForm({ ...prodForm, marca: e.target.value })} />
+                </label>
+                <label><span>Modelo</span>
+                  <input value={prodForm.modelo} onChange={(e) => setProdForm({ ...prodForm, modelo: e.target.value })} />
+                </label>
+                <label className="full"><span>Tipo</span>
+                  <input value={prodForm.tipo} onChange={(e) => setProdForm({ ...prodForm, tipo: e.target.value })} />
+                </label>
+                <label className="full"><span>Descripción</span>
+                  <textarea rows={2} value={prodForm.descripcion} onChange={(e) => setProdForm({ ...prodForm, descripcion: e.target.value })} />
+                </label>
+                <label className="full"><span>Uso</span>
+                  <textarea rows={2} value={prodForm.uso} onChange={(e) => setProdForm({ ...prodForm, uso: e.target.value })} />
+                </label>
+                <label className="full"><span>Características</span>
+                  <textarea rows={3} value={prodForm.caracteristicas} onChange={(e) => setProdForm({ ...prodForm, caracteristicas: e.target.value })} />
+                </label>
+                <label className="full"><span>Imágenes (mínimo 3 sugerido, máximo 6)</span>
+                  <input type="file" accept="image/*" multiple onChange={(e) => setProdImgs(Array.from(e.target.files || []).slice(0, 6))} />
+                  {prodImgs.length > 0 && <small>{prodImgs.length} foto(s) seleccionadas {prodImgs.length < 3 && '· se recomiendan al menos 3'}</small>}
                 </label>
               </div>
               <div className="cajas-form-actions">
