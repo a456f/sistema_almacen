@@ -534,3 +534,34 @@
 }
 .confirm-actions button.danger { background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; border: none; }
 .confirm-actions button.primary { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; border: none; }
+
+/* Producto: botón de historial + timeline inline */
+.prod-card-wrap { display: flex; flex-direction: column; }
+.prod-card-actions { display: flex; gap: 6px; align-items: center; }
+.prod-hist-btn {
+  border: 1px solid #cbd5e1;
+  background: #f1f5f9;
+  color: #475569;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 0.74rem;
+  font-weight: 600;
+  font-family: inherit;
+}
+.prod-hist-btn:hover { background: #e2e8f0; }
+.prod-hist-inline {
+  margin: -2px 0 8px 0;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 10px 10px;
+  position: relative;
+  top: -2px;
+}
+.prod-hist-inline .hist-timeline { margin: 0; }
+.prod-hist-inline .hist-item { padding-bottom: 10px; }
+.prod-hist-inline .hist-content { padding: 6px 10px; }
+.prod-hist-empty { color: var(--text-muted); font-size: 0.82rem; padding: 8px 0; }

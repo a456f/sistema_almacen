@@ -88,6 +88,9 @@ const CajasModule = () => {
   const [detalleCaja, setDetalleCaja] = useState<Caja | null>(null);
   const [historial, setHistorial] = useState<HistorialEntry[]>([]);
   const [verHistorial, setVerHistorial] = useState(false);
+  // Historial por producto (uno expandido a la vez)
+  const [prodHistId, setProdHistId] = useState<number | null>(null);
+  const [prodHist, setProdHist] = useState<HistorialEntry[]>([]);
 
   // Producto
   const [prodModal, setProdModal] = useState(false);
@@ -277,6 +280,15 @@ const CajasModule = () => {
     }
   );
 
+  const toggleHistorialProducto = async (id: number) => {
+    if (prodHistId === id) { setProdHistId(null); return; }
+    try {
+      const res = await fetch(`${API_URL}/productos/${id}/historial`);
+      setProdHist(res.ok ? await res.json() : []);
+      setProdHistId(id);
+    } catch { notify('No se pudo cargar el historial', 'err'); }
+  };
+
   const estadoBadge = (estado: string) => (
     <span className="cajas-estado" style={{
       background: (ESTADO_COLOR[estado] || '#64748b') + '22',
@@ -431,7 +443,8 @@ const CajasModule = () => {
               ) : (
                 <div className="prod-list">
                   {detalleCaja.productos!.map((p) => (
-                    <div key={p.id} className="prod-card">
+                    <div key={p.id} className="prod-card-wrap">
+                    <div className="prod-card">
                       <div className="prod-imgs">
                         {p.imagenes && p.imagenes.length > 0
                           ? p.imagenes.slice(0, 3).map((im) => <img key={im.id} src={fileUrl(im.ruta)} alt="" loading="lazy" />)
@@ -455,7 +468,35 @@ const CajasModule = () => {
                         )}
                         {p.numero_serie && <code className="prod-sn">S/N: {p.numero_serie}</code>}
                       </div>
-                      <button className="prod-del" onClick={() => eliminarProducto(p)} title="Eliminar producto">{Icon.trash}</button>
+                      <div className="prod-card-actions">
+                        <button className="prod-hist-btn" onClick={() => toggleHistorialProducto(p.id)} title="Ver historial">
+                          {prodHistId === p.id ? 'Ocultar' : 'Historial'}
+                        </button>
+                        <button className="prod-del" onClick={() => eliminarProducto(p)} title="Eliminar producto">{Icon.trash}</button>
+                      </div>
+                    </div>
+                    {prodHistId === p.id && (
+                      <div className="prod-hist-inline">
+                        {prodHist.length === 0 ? (
+                          <p className="prod-hist-empty">Sin eventos registrados para este producto</p>
+                        ) : (
+                          <ul className="hist-timeline">
+                            {prodHist.map((h) => (
+                              <li key={h.id} className="hist-item">
+                                <div className="hist-dot" />
+                                <div className="hist-content">
+                                  <div className="hist-head">
+                                    <span className="hist-accion">{h.accion.replace('_', ' ')}</span>
+                                    <time>{new Date(h.fecha).toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</time>
+                                  </div>
+                                  {h.descripcion && <p>{h.descripcion}</p>}
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
                     </div>
                   ))}
                 </div>
