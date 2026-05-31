@@ -101,6 +101,9 @@ const CajasModule = () => {
   const PRODS_LIMIT = 10;
   // Cache de detalles ya cargados (para prefetch en hover)
   const detalleCache = useRef<Map<number, { caja: Caja; hist: HistorialEntry[]; ts: number }>>(new Map());
+  // Visor de imágenes (lightbox)
+  const [viewer, setViewer] = useState<{ urls: string[]; titulos?: string[]; index: number } | null>(null);
+  const abrirViewer = (urls: string[], index: number, titulos?: string[]) => setViewer({ urls, index, titulos });
 
   // Producto
   const [prodModal, setProdModal] = useState(false);
@@ -485,12 +488,18 @@ const CajasModule = () => {
             </div>
             <div className="cajas-detalle">
               <div className="caja-imgs-row">
-                {(detalleCaja.imagenes || []).map((im) => (
-                  <div key={im.id} className="caja-img-thumb">
-                    <img src={fileUrl(im.ruta)} alt="" loading="lazy" />
-                    <button onClick={() => eliminarImagenCaja(detalleCaja.id, im.id)} title="Eliminar imagen">{Icon.close}</button>
-                  </div>
-                ))}
+                {(detalleCaja.imagenes || []).slice(0, 5).map((im, i) => {
+                  const urls = (detalleCaja.imagenes || []).map((x) => fileUrl(x.ruta));
+                  const extra = ((detalleCaja.imagenes || []).length > 5 && i === 4) ? (detalleCaja.imagenes || []).length - 5 : 0;
+                  return (
+                    <div key={im.id} className="caja-img-thumb">
+                      <img src={fileUrl(im.ruta)} alt="" loading="lazy"
+                        onClick={() => abrirViewer(urls, i)} style={{ cursor: 'pointer' }} />
+                      {extra > 0 && <span className="caja-img-overlay" onClick={() => abrirViewer(urls, i)}>+{extra}</span>}
+                      <button onClick={() => eliminarImagenCaja(detalleCaja.id, im.id)} title="Eliminar imagen">{Icon.close}</button>
+                    </div>
+                  );
+                })}
                 {(detalleCaja.imagenes || []).length === 0 && (
                   <div className="caja-img-ph-grande">{Icon.image} <span>Sin imágenes</span></div>
                 )}
@@ -519,7 +528,16 @@ const CajasModule = () => {
                     <div className="prod-card">
                       <div className="prod-imgs">
                         {p.imagenes && p.imagenes.length > 0
-                          ? p.imagenes.slice(0, 3).map((im) => <img key={im.id} src={fileUrl(im.ruta)} alt="" loading="lazy" />)
+                          ? p.imagenes.slice(0, 3).map((im, i) => {
+                              const urls = p.imagenes!.map((x) => fileUrl(x.ruta));
+                              const extra = (p.imagenes!.length > 3 && i === 2) ? p.imagenes!.length - 3 : 0;
+                              return (
+                                <div key={im.id} className="prod-img-wrap" onClick={(e) => { e.stopPropagation(); abrirViewer(urls, i, [`${p.nombre} - foto ${i+1}`]); }}>
+                                  <img src={fileUrl(im.ruta)} alt="" loading="lazy" />
+                                  {extra > 0 && <span className="prod-img-overlay">+{extra}</span>}
+                                </div>
+                              );
+                            })
                           : <div className="prod-img-ph">{Icon.image}</div>}
                       </div>
                       <div className="prod-body">
@@ -689,6 +707,38 @@ const CajasModule = () => {
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* Visor de imágenes (lightbox) */}
+      {viewer && (
+        <div className="viewer-overlay" onClick={() => setViewer(null)}>
+          <button className="viewer-close" onClick={() => setViewer(null)}>{Icon.close}</button>
+          <a
+            className="viewer-download"
+            href={viewer.urls[viewer.index]}
+            download
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+          >{Icon.download} Descargar</a>
+          <div className="viewer-counter">{viewer.index + 1} / {viewer.urls.length}</div>
+          <button
+            className="viewer-arrow viewer-prev"
+            disabled={viewer.index === 0}
+            onClick={(e) => { e.stopPropagation(); setViewer({ ...viewer, index: Math.max(0, viewer.index - 1) }); }}
+          >‹</button>
+          <img
+            className="viewer-img"
+            src={viewer.urls[viewer.index]}
+            alt=""
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            className="viewer-arrow viewer-next"
+            disabled={viewer.index === viewer.urls.length - 1}
+            onClick={(e) => { e.stopPropagation(); setViewer({ ...viewer, index: Math.min(viewer.urls.length - 1, viewer.index + 1) }); }}
+          >›</button>
         </div>
       )}
 
