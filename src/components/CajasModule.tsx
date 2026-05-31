@@ -537,8 +537,6 @@ const CajasModule = () => {
           {ESTADOS_CAJA.map((e) => <option key={e} value={e}>{e.replace('_', ' ')}</option>)}
         </select>
         <button className="cajas-add" onClick={abrirNuevaCaja}>{Icon.plus} Nueva caja</button>
-        <button className="cajas-add" style={{ background: 'linear-gradient(135deg, #6366f1, #4f46e5)' }} onClick={() => { setCatModal(true); cargarCatalogos(); }}>📋 Catálogos</button>
-        <button className="cajas-add" style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }} onClick={() => { setUsuariosModal(true); cargarUsuarios(); }}>👥 Usuarios</button>
         <a className="cajas-export" href={`${BASE_URL}/api/cajas/export/excel`} target="_blank" rel="noopener noreferrer" title="Descargar Excel">{Icon.download} Excel</a>
       </div>
 

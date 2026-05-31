@@ -34,9 +34,6 @@ const registrarHistorial = async (conn, entidad, entidadId, accion, descripcion,
       'INSERT INTO historial (entidad, entidad_id, accion, descripcion, usuario_id) VALUES (?, ?, ?, ?, ?)',
       [entidad, entidadId, accion, descripcion, usuarioId || null]
     );
-  } catch (_) {}
-}
-    );
   } catch (_) { /* no romper la operación principal por historial */ }
 };
 
@@ -365,7 +362,7 @@ router.post('/', uploadCaja.array('imagenes', 6), async (req, res) => {
       const valores = archivos.map((f) => [cajaId, f.path.replace(/\\/g, '/')]);
       await conn.query('INSERT INTO caja_imagenes (caja_id, ruta) VALUES ?', [valores]);
     }
-    await registrarHistorial(conn, 'CAJA', cajaId, 'CREADA', `Caja ${codigo_qr.trim(, req.body?.actor_user_id || null)} creada con ${archivos.length} imagen(es)`);
+    await registrarHistorial(conn, 'CAJA', cajaId, 'CREADA', `Caja ${codigo_qr.trim()} creada con ${archivos.length} imagen(es)`, req.body?.actor_user_id || null);
 
     await conn.commit();
     res.status(201).json({ message: 'Caja registrada.', id: cajaId });

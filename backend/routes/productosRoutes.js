@@ -36,9 +36,6 @@ const registrarHistorial = async (conn, entidadId, accion, descripcion, entidad 
       [entidad, entidadId, accion, descripcion, usuarioId || null]
     );
   } catch (_) {}
-}
-    );
-  } catch (_) {}
 };
 
 const fetchImagenes = async (productoId) => {
