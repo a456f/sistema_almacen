@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { API_URL, BASE_URL } from '../config/api';
 import './CajasModule.css';
 
@@ -69,8 +69,11 @@ const CajasModule = () => {
   const [cajas, setCajas] = useState<Caja[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
-  const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState(''); // input crudo
+  const [search, setSearch] = useState('');           // valor debounced
   const [filtroEstado, setFiltroEstado] = useState('');
+  const [cargandoCajas, setCargandoCajas] = useState(false);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
@@ -89,6 +92,7 @@ const CajasModule = () => {
   const [prodModal, setProdModal] = useState(false);
   const [prodForm, setProdForm] = useState(emptyProdForm);
   const [prodImgs, setProdImgs] = useState<File[]>([]);
+  const [verMasDetalles, setVerMasDetalles] = useState(false);
 
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
   const notify = (msg: string, type: 'ok' | 'err' = 'ok') => {
@@ -99,6 +103,7 @@ const CajasModule = () => {
     const params = new URLSearchParams({
       page: String(page), limit: '12', search, estado: filtroEstado,
     });
+    setCargandoCajas(true);
     try {
       const res = await fetch(`${API_URL}/cajas?${params}`);
       if (res.ok) {
@@ -106,7 +111,15 @@ const CajasModule = () => {
         setCajas(data.data); setTotalPages(data.totalPages); setTotal(data.total);
       }
     } catch { notify('Error al cargar cajas', 'err'); }
+    finally { setCargandoCajas(false); }
   }, [page, search, filtroEstado]);
+
+  // Debounce de la búsqueda (350ms sin escribir → dispara una sola request)
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => setSearch(searchInput), 350);
+    return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
+  }, [searchInput]);
 
   const cargarCategorias = useCallback(async () => {
     try {
@@ -161,13 +174,10 @@ const CajasModule = () => {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'No se pudo guardar');
       setCajaModal(false);
-      notify(isNew ? 'Caja registrada · ahora agrega productos' : 'Caja actualizada');
+      notify(isNew ? 'Caja registrada' : 'Caja actualizada');
       cargarCajas(); cargarStats();
-      // Si es nueva, abre el detalle y dispara el modal de "agregar producto"
-      if (isNew && data.id) {
-        await abrirDetalle(data.id);
-        abrirNuevoProducto();
-      }
+      // Si es nueva, abre el detalle (sin forzar modal de producto)
+      if (isNew && data.id) await abrirDetalle(data.id);
     } catch (err: any) { notify(err.message, 'err'); }
   };
 
@@ -195,7 +205,7 @@ const CajasModule = () => {
   const recargarDetalle = () => detalleCaja && abrirDetalle(detalleCaja.id);
 
   const abrirNuevoProducto = () => {
-    setProdForm(emptyProdForm); setProdImgs([]); setProdModal(true);
+    setProdForm(emptyProdForm); setProdImgs([]); setVerMasDetalles(false); setProdModal(true);
   };
   const guardarProducto = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -269,7 +279,8 @@ const CajasModule = () => {
       <div className="cajas-toolbar">
         <div className="cajas-search">
           {Icon.search}
-          <input placeholder="Buscar por QR, marca, modelo, S/N, nombre…" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input placeholder="Buscar por QR, marca, modelo, S/N, nombre…" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
+          {cargandoCajas && <span className="cajas-spinner" />}
         </div>
         <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)}>
           <option value="">Todos los estados</option>
@@ -285,7 +296,7 @@ const CajasModule = () => {
           <div key={c.id} className="caja-card" onClick={() => abrirDetalle(c.id)}>
             <div className="caja-card-img">
               {c.portada
-                ? <img src={fileUrl(c.portada)} alt="" />
+                ? <img src={fileUrl(c.portada)} alt="" loading="lazy" />
                 : <div className="caja-card-img-ph">{Icon.box}</div>}
               <div className="caja-card-estado">{estadoBadge(c.estado)}</div>
             </div>
@@ -363,7 +374,7 @@ const CajasModule = () => {
               <div className="caja-imgs-row">
                 {(detalleCaja.imagenes || []).map((im) => (
                   <div key={im.id} className="caja-img-thumb">
-                    <img src={fileUrl(im.ruta)} alt="" />
+                    <img src={fileUrl(im.ruta)} alt="" loading="lazy" />
                     <button onClick={() => eliminarImagenCaja(detalleCaja.id, im.id)} title="Eliminar imagen">{Icon.close}</button>
                   </div>
                 ))}
@@ -381,14 +392,20 @@ const CajasModule = () => {
               </div>
 
               {(detalleCaja.productos?.length ?? 0) === 0 ? (
-                <p className="prod-empty">Aún no hay productos en esta caja</p>
+                <button type="button" className="prod-empty-cta" onClick={abrirNuevoProducto}>
+                  <span className="prod-empty-icon">{Icon.plus}</span>
+                  <span>
+                    <strong>Esta caja aún no tiene productos</strong>
+                    <small>Toca aquí para agregar el primero</small>
+                  </span>
+                </button>
               ) : (
                 <div className="prod-list">
                   {detalleCaja.productos!.map((p) => (
                     <div key={p.id} className="prod-card">
                       <div className="prod-imgs">
                         {p.imagenes && p.imagenes.length > 0
-                          ? p.imagenes.slice(0, 3).map((im) => <img key={im.id} src={fileUrl(im.ruta)} alt="" />)
+                          ? p.imagenes.slice(0, 3).map((im) => <img key={im.id} src={fileUrl(im.ruta)} alt="" loading="lazy" />)
                           : <div className="prod-img-ph">{Icon.image}</div>}
                       </div>
                       <div className="prod-body">
@@ -453,13 +470,10 @@ const CajasModule = () => {
             <form onSubmit={guardarProducto} className="cajas-form">
               <div className="cajas-form-grid">
                 <label className="full"><span>Nombre del producto *</span>
-                  <input value={prodForm.nombre} onChange={(e) => setProdForm({ ...prodForm, nombre: e.target.value })} required />
+                  <input autoFocus value={prodForm.nombre} onChange={(e) => setProdForm({ ...prodForm, nombre: e.target.value })} required />
                 </label>
-                <label><span>N° de serie (S/N)</span>
-                  <input placeholder="Se escanea desde el app" value={prodForm.numero_serie} onChange={(e) => setProdForm({ ...prodForm, numero_serie: e.target.value })} />
-                </label>
-                <label><span>Cantidad</span>
-                  <input type="number" min={1} value={prodForm.cantidad} onChange={(e) => setProdForm({ ...prodForm, cantidad: Number(e.target.value) })} />
+                <label className="full"><span>N° de serie (S/N)</span>
+                  <input placeholder="Escanea desde el app o escribe" value={prodForm.numero_serie} onChange={(e) => setProdForm({ ...prodForm, numero_serie: e.target.value })} />
                 </label>
                 <label><span>Categoría</span>
                   <select value={prodForm.categoria_id} onChange={(e) => setProdForm({ ...prodForm, categoria_id: e.target.value })}>
@@ -472,29 +486,42 @@ const CajasModule = () => {
                     {ESTADOS_PROD.map((s) => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
                   </select>
                 </label>
-                <label><span>Marca</span>
-                  <input value={prodForm.marca} onChange={(e) => setProdForm({ ...prodForm, marca: e.target.value })} />
-                </label>
-                <label><span>Modelo</span>
-                  <input value={prodForm.modelo} onChange={(e) => setProdForm({ ...prodForm, modelo: e.target.value })} />
-                </label>
-                <label className="full"><span>Tipo</span>
-                  <input value={prodForm.tipo} onChange={(e) => setProdForm({ ...prodForm, tipo: e.target.value })} />
-                </label>
-                <label className="full"><span>Descripción</span>
-                  <textarea rows={2} value={prodForm.descripcion} onChange={(e) => setProdForm({ ...prodForm, descripcion: e.target.value })} />
-                </label>
-                <label className="full"><span>Uso</span>
-                  <textarea rows={2} value={prodForm.uso} onChange={(e) => setProdForm({ ...prodForm, uso: e.target.value })} />
-                </label>
-                <label className="full"><span>Características</span>
-                  <textarea rows={3} value={prodForm.caracteristicas} onChange={(e) => setProdForm({ ...prodForm, caracteristicas: e.target.value })} />
-                </label>
-                <label className="full"><span>Imágenes (mínimo 3 sugerido, máximo 6)</span>
+                <label className="full"><span>Imágenes (sugerido mín. 3, máximo 6)</span>
                   <input type="file" accept="image/*" multiple onChange={(e) => setProdImgs(Array.from(e.target.files || []).slice(0, 6))} />
                   {prodImgs.length > 0 && <small>{prodImgs.length} foto(s) seleccionadas {prodImgs.length < 3 && '· se recomiendan al menos 3'}</small>}
                 </label>
               </div>
+
+              <button type="button" className="ver-mas-btn" onClick={() => setVerMasDetalles((v) => !v)}>
+                {verMasDetalles ? '− Ocultar' : '+ Más detalles'} (marca, modelo, tipo, descripción…)
+              </button>
+
+              {verMasDetalles && (
+                <div className="cajas-form-grid">
+                  <label><span>Cantidad</span>
+                    <input type="number" min={1} value={prodForm.cantidad} onChange={(e) => setProdForm({ ...prodForm, cantidad: Number(e.target.value) })} />
+                  </label>
+                  <label><span>Marca</span>
+                    <input value={prodForm.marca} onChange={(e) => setProdForm({ ...prodForm, marca: e.target.value })} />
+                  </label>
+                  <label><span>Modelo</span>
+                    <input value={prodForm.modelo} onChange={(e) => setProdForm({ ...prodForm, modelo: e.target.value })} />
+                  </label>
+                  <label><span>Tipo</span>
+                    <input value={prodForm.tipo} onChange={(e) => setProdForm({ ...prodForm, tipo: e.target.value })} />
+                  </label>
+                  <label className="full"><span>Descripción</span>
+                    <textarea rows={2} value={prodForm.descripcion} onChange={(e) => setProdForm({ ...prodForm, descripcion: e.target.value })} />
+                  </label>
+                  <label className="full"><span>Uso</span>
+                    <textarea rows={2} value={prodForm.uso} onChange={(e) => setProdForm({ ...prodForm, uso: e.target.value })} />
+                  </label>
+                  <label className="full"><span>Características</span>
+                    <textarea rows={3} value={prodForm.caracteristicas} onChange={(e) => setProdForm({ ...prodForm, caracteristicas: e.target.value })} />
+                  </label>
+                </div>
+              )}
+
               <div className="cajas-form-actions">
                 <button type="button" onClick={() => setProdModal(false)}>Cancelar</button>
                 <button type="submit" className="primary">Registrar producto</button>
