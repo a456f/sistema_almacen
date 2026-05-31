@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { API_URL, BASE_URL } from '../config/api';
 import './CajasModule.css';
+import { resizeImageFiles } from '../utils/image';
 
 interface Categoria { id: number; nombre: string; color: string; }
 interface ImagenItem { id: number; ruta: string; }
@@ -387,7 +388,7 @@ const CajasModule = () => {
                   <textarea rows={3} value={cajaForm.detalles} onChange={(e) => setCajaForm({ ...cajaForm, detalles: e.target.value })} />
                 </label>
                 <label className="full"><span>Imágenes (puedes elegir varias)</span>
-                  <input type="file" accept="image/*" multiple onChange={(e) => setCajaImgs(Array.from(e.target.files || []))} />
+                  <input type="file" accept="image/*" multiple onChange={async (e) => setCajaImgs(await resizeImageFiles(Array.from(e.target.files || [])))} />
                   {cajaImgs.length > 0 && <small>{cajaImgs.length} archivo(s) seleccionados</small>}
                 </label>
               </div>
@@ -564,7 +565,7 @@ const CajasModule = () => {
                   </select>
                 </label>
                 <label className="full"><span>Imágenes (sugerido mín. 3, máximo 6)</span>
-                  <input type="file" accept="image/*" multiple onChange={(e) => setProdImgs(Array.from(e.target.files || []).slice(0, 6))} />
+                  <input type="file" accept="image/*" multiple onChange={async (e) => setProdImgs(await resizeImageFiles(Array.from(e.target.files || []).slice(0, 6)))} />
                   {prodImgs.length > 0 && <small>{prodImgs.length} foto(s) seleccionadas {prodImgs.length < 3 && '· se recomiendan al menos 3'}</small>}
                 </label>
               </div>
