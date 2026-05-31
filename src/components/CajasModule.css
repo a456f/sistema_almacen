@@ -912,3 +912,46 @@
   color: var(--text-muted);
   white-space: nowrap;
 }
+
+/* Validación de catálogo en form de producto */
+.cajas-form label.cat-invalid input { border-color: #dc2626; background: #fef2f2; }
+.cat-ok {
+  font-style: normal;
+  color: #16a34a;
+  font-size: 0.7rem;
+  font-weight: 700;
+  margin-left: 6px;
+}
+.cat-err {
+  font-style: normal;
+  color: #dc2626;
+  font-size: 0.7rem;
+  font-weight: 700;
+  margin-left: 6px;
+}
+
+.hist-user {
+  display: block; margin-top: 3px;
+  font-size: 0.72rem; color: var(--text-muted);
+  font-style: italic;
+}
+
+.user-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  padding: 14px;
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+.user-form input, .user-form select {
+  border: 1.5px solid var(--border);
+  border-radius: 9px;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.88rem;
+  outline: none;
+}
+.user-form input:focus, .user-form select:focus { border-color: var(--primary); }
+.user-form input:disabled { background: #e2e8f0; color: var(--text-muted); }
+.user-form button { padding: 0 14px; }

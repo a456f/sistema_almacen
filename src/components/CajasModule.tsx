@@ -33,6 +33,7 @@ interface HistorialEntry {
   entidad_id: number;
   accion: string;
   descripcion: string | null;
+  usuario_nombre?: string | null;
   fecha: string;
 }
 interface Stats {
@@ -123,6 +124,35 @@ const CajasModule = () => {
   const [catModal, setCatModal] = useState(false);
   const [catTab, setCatTab] = useState<'marcas' | 'modelos' | 'tipos'>('marcas');
   const [catNuevo, setCatNuevo] = useState('');
+  // Usuarios
+  interface UsuarioRow { id: number; username: string; nombre: string | null; rol: string; estado: number; ultimo_login: string | null; }
+  const [usuariosModal, setUsuariosModal] = useState(false);
+  const [usuarios, setUsuarios] = useState<UsuarioRow[]>([]);
+  const [usuarioEdit, setUsuarioEdit] = useState<{ id: number | null; username: string; nombre: string; rol: string; password: string }>({ id: null, username: '', nombre: '', rol: 'admin', password: '' });
+  const cargarUsuarios = async () => {
+    try { const r = await fetch(`${API_URL}/usuarios`); if (r.ok) setUsuarios(await r.json()); } catch {}
+  };
+  const guardarUsuario = async () => {
+    if (!usuarioEdit.username.trim()) { notify('Username obligatorio', 'err'); return; }
+    if (!usuarioEdit.id && !usuarioEdit.password) { notify('Password obligatorio al crear', 'err'); return; }
+    const url = usuarioEdit.id ? `${API_URL}/usuarios/${usuarioEdit.id}` : `${API_URL}/usuarios`;
+    const method = usuarioEdit.id ? 'PUT' : 'POST';
+    try {
+      const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(usuarioEdit) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Error');
+      notify(usuarioEdit.id ? 'Usuario actualizado' : 'Usuario creado');
+      setUsuarioEdit({ id: null, username: '', nombre: '', rol: 'admin', password: '' });
+      cargarUsuarios();
+    } catch (err: any) { notify(err.message, 'err'); }
+  };
+  const eliminarUsuario = (u: UsuarioRow) => pedirConfirm(
+    'Eliminar usuario',
+    `¿Eliminar al usuario "${u.username}"?`,
+    async () => {
+      try { await fetch(`${API_URL}/usuarios/${u.id}`, { method: 'DELETE' }); cargarUsuarios(); notify('Eliminado'); } catch {}
+    }
+  );
 
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
   const [confirmar, setConfirmar] = useState<{
@@ -238,6 +268,8 @@ const CajasModule = () => {
     const url = cajaEditingId ? `${API_URL}/cajas/${cajaEditingId}` : `${API_URL}/cajas`;
     const method = cajaEditingId ? 'PUT' : 'POST';
     const fd = new FormData();
+    const actorUserId = (() => { try { const ss = JSON.parse(localStorage.getItem('inventario_session') || 'null'); return ss?.user?.id ?? ''; } catch { return ''; } })();
+    if (actorUserId) fd.append('actor_user_id', String(actorUserId));
     fd.append('codigo_qr', cajaForm.codigo_qr);
     fd.append('estado', cajaForm.estado);
     fd.append('detalles', cajaForm.detalles);
@@ -362,11 +394,26 @@ const CajasModule = () => {
     setVerMasDetalles(true); // al editar, abrir 'más detalles' por defecto
     setProdModal(true);
   };
+  const valorEnCatalogo = (lista: { nombre: string }[], v: string) =>
+    !v.trim() || lista.some((it) => it.nombre.toLowerCase() === v.trim().toLowerCase());
+
   const guardarProducto = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!detalleCaja) return;
     if (prodImgs.length > 6) { notify('Máximo 6 fotos', 'err'); return; }
-    // Aviso suave si tiene menos de 3 fotos (solo al CREAR, no al editar)
+    if (!valorEnCatalogo(marcas, prodForm.marca)) {
+      notify(`Marca "${prodForm.marca}" no existe. Agrégala desde Catálogos.`, 'err');
+      return;
+    }
+    if (!valorEnCatalogo(modelos, prodForm.modelo)) {
+      notify(`Modelo "${prodForm.modelo}" no existe. Agrégalo desde Catálogos.`, 'err');
+      return;
+    }
+    if (!valorEnCatalogo(tipos, prodForm.tipo)) {
+      notify(`Tipo "${prodForm.tipo}" no existe. Agrégalo desde Catálogos.`, 'err');
+      return;
+    }
+        // Aviso suave si tiene menos de 3 fotos (solo al CREAR, no al editar)
     if (!prodEditingId && prodImgs.length > 0 && prodImgs.length < 3) {
       pedirConfirm(
         'Pocas fotos',
@@ -386,6 +433,8 @@ const CajasModule = () => {
     const method = isEdit ? 'PUT' : 'POST';
 
     const fd = new FormData();
+    const actorUserId = (() => { try { const ss = JSON.parse(localStorage.getItem('inventario_session') || 'null'); return ss?.user?.id ?? ''; } catch { return ''; } })();
+    if (actorUserId) fd.append('actor_user_id', String(actorUserId));
     if (!isEdit) fd.append('caja_id', String(detalleCaja.id));
     Object.entries(prodForm).forEach(([k, v]) => fd.append(k, String(v ?? '')));
     prodImgs.forEach((f) => fd.append('fotos', f));
@@ -489,6 +538,7 @@ const CajasModule = () => {
         </select>
         <button className="cajas-add" onClick={abrirNuevaCaja}>{Icon.plus} Nueva caja</button>
         <button className="cajas-add" style={{ background: 'linear-gradient(135deg, #6366f1, #4f46e5)' }} onClick={() => { setCatModal(true); cargarCatalogos(); }}>📋 Catálogos</button>
+        <button className="cajas-add" style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }} onClick={() => { setUsuariosModal(true); cargarUsuarios(); }}>👥 Usuarios</button>
         <a className="cajas-export" href={`${BASE_URL}/api/cajas/export/excel`} target="_blank" rel="noopener noreferrer" title="Descargar Excel">{Icon.download} Excel</a>
       </div>
 
@@ -682,6 +732,7 @@ const CajasModule = () => {
                                             <time>{new Date(h.fecha).toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</time>
                                           </div>
                                           {h.descripcion && <p>{h.descripcion}</p>}
+                                  {h.usuario_nombre && <small className="hist-user">por {h.usuario_nombre}</small>}
                                         </div>
                                       </li>
                                     ))}
@@ -732,6 +783,7 @@ const CajasModule = () => {
                             <time>{new Date(h.fecha).toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</time>
                           </div>
                           {h.descripcion && <p>{h.descripcion}</p>}
+                                  {h.usuario_nombre && <small className="hist-user">por {h.usuario_nombre}</small>}
                         </div>
                       </li>
                     ))}
@@ -784,16 +836,19 @@ const CajasModule = () => {
                   <label><span>Cantidad</span>
                     <input type="number" min={1} value={prodForm.cantidad} onChange={(e) => setProdForm({ ...prodForm, cantidad: Number(e.target.value) })} />
                   </label>
-                  <label><span>Marca</span>
-                    <input list="cat-marcas" placeholder="Selecciona o escribe" value={prodForm.marca} onChange={(e) => setProdForm({ ...prodForm, marca: e.target.value })} />
+                  <label className={prodForm.marca && !valorEnCatalogo(marcas, prodForm.marca) ? 'cat-invalid' : ''}>
+                    <span>Marca {prodForm.marca && (valorEnCatalogo(marcas, prodForm.marca) ? <em className="cat-ok">✓</em> : <em className="cat-err">no existe en catálogo</em>)}</span>
+                    <input list="cat-marcas" placeholder="Selecciona del catálogo" value={prodForm.marca} onChange={(e) => setProdForm({ ...prodForm, marca: e.target.value })} />
                     <datalist id="cat-marcas">{marcas.map(m => <option key={m.id} value={m.nombre} />)}</datalist>
                   </label>
-                  <label><span>Modelo</span>
-                    <input list="cat-modelos" placeholder="Selecciona o escribe" value={prodForm.modelo} onChange={(e) => setProdForm({ ...prodForm, modelo: e.target.value })} />
+                  <label className={prodForm.modelo && !valorEnCatalogo(modelos, prodForm.modelo) ? 'cat-invalid' : ''}>
+                    <span>Modelo {prodForm.modelo && (valorEnCatalogo(modelos, prodForm.modelo) ? <em className="cat-ok">✓</em> : <em className="cat-err">no existe en catálogo</em>)}</span>
+                    <input list="cat-modelos" placeholder="Selecciona del catálogo" value={prodForm.modelo} onChange={(e) => setProdForm({ ...prodForm, modelo: e.target.value })} />
                     <datalist id="cat-modelos">{modelos.map(m => <option key={m.id} value={m.nombre} />)}</datalist>
                   </label>
-                  <label><span>Tipo</span>
-                    <input list="cat-tipos" placeholder="Selecciona o escribe" value={prodForm.tipo} onChange={(e) => setProdForm({ ...prodForm, tipo: e.target.value })} />
+                  <label className={prodForm.tipo && !valorEnCatalogo(tipos, prodForm.tipo) ? 'cat-invalid' : ''}>
+                    <span>Tipo {prodForm.tipo && (valorEnCatalogo(tipos, prodForm.tipo) ? <em className="cat-ok">✓</em> : <em className="cat-err">no existe en catálogo</em>)}</span>
+                    <input list="cat-tipos" placeholder="Selecciona del catálogo" value={prodForm.tipo} onChange={(e) => setProdForm({ ...prodForm, tipo: e.target.value })} />
                     <datalist id="cat-tipos">{tipos.map(t => <option key={t.id} value={t.nombre} />)}</datalist>
                   </label>
                   <label className="full"><span>Descripción</span>
@@ -885,6 +940,55 @@ const CajasModule = () => {
                   <li className="cat-empty">No hay {catTab} registrados</li>
                 )}
               </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Usuarios */}
+      {usuariosModal && (
+        <div className="cajas-overlay" onClick={() => setUsuariosModal(false)}>
+          <div className="cajas-modal wide" onClick={(e) => e.stopPropagation()}>
+            <div className="cajas-modal-head">
+              <h3>Gestión de Usuarios</h3>
+              <button onClick={() => setUsuariosModal(false)}>{Icon.close}</button>
+            </div>
+            <div className="cajas-detalle" style={{ paddingTop: 0 }}>
+              <div className="user-form">
+                <input placeholder="Usuario" value={usuarioEdit.username} disabled={!!usuarioEdit.id}
+                  onChange={(e) => setUsuarioEdit({ ...usuarioEdit, username: e.target.value })} />
+                <input placeholder="Nombre completo" value={usuarioEdit.nombre}
+                  onChange={(e) => setUsuarioEdit({ ...usuarioEdit, nombre: e.target.value })} />
+                <select value={usuarioEdit.rol} onChange={(e) => setUsuarioEdit({ ...usuarioEdit, rol: e.target.value })}>
+                  <option value="admin">Admin</option>
+                  <option value="operador">Operador</option>
+                  <option value="lector">Lector</option>
+                </select>
+                <input type="password" placeholder={usuarioEdit.id ? 'Nueva contraseña (opcional)' : 'Contraseña *'} value={usuarioEdit.password}
+                  onChange={(e) => setUsuarioEdit({ ...usuarioEdit, password: e.target.value })} />
+                <button className="cajas-add small" onClick={guardarUsuario}>{usuarioEdit.id ? 'Guardar cambios' : '+ Crear usuario'}</button>
+                {usuarioEdit.id && <button onClick={() => setUsuarioEdit({ id: null, username: '', nombre: '', rol: 'admin', password: '' })}>Cancelar edición</button>}
+              </div>
+
+              <table className="prod-table" style={{ marginTop: 14 }}>
+                <thead><tr><th>ID</th><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Estado</th><th>Último login</th><th></th></tr></thead>
+                <tbody>
+                  {usuarios.map((u) => (
+                    <tr key={u.id} className="prod-tr">
+                      <td>{u.id}</td>
+                      <td><code className="prod-sn">{u.username}</code></td>
+                      <td>{u.nombre || '—'}</td>
+                      <td>{u.rol}</td>
+                      <td>{u.estado === 1 ? <span style={{ color: '#16a34a', fontWeight: 700 }}>Activo</span> : <span style={{ color: '#dc2626' }}>Inactivo</span>}</td>
+                      <td className="prod-tr-fecha">{u.ultimo_login ? new Date(u.ultimo_login).toLocaleString('es-PE') : 'Nunca'}</td>
+                      <td className="prod-tr-actions">
+                        <button className="prod-edit-btn" onClick={() => setUsuarioEdit({ id: u.id, username: u.username, nombre: u.nombre || '', rol: u.rol, password: '' })} title="Editar">{Icon.edit}</button>
+                        <button className="prod-del" onClick={() => eliminarUsuario(u)} title="Eliminar">{Icon.trash}</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>

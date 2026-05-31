@@ -29,11 +29,14 @@ const uploadProd = multer({
 
 const traducirError = (err) => err.message || 'Error en el servidor.';
 
-const registrarHistorial = async (conn, entidadId, accion, descripcion, entidad = 'PRODUCTO') => {
+const registrarHistorial = async (conn, entidadId, accion, descripcion, entidad = 'PRODUCTO', usuarioId = null) => {
   try {
     await conn.query(
-      'INSERT INTO historial (entidad, entidad_id, accion, descripcion) VALUES (?, ?, ?, ?)',
-      [entidad, entidadId, accion, descripcion]
+      'INSERT INTO historial (entidad, entidad_id, accion, descripcion, usuario_id) VALUES (?, ?, ?, ?, ?)',
+      [entidad, entidadId, accion, descripcion, usuarioId || null]
+    );
+  } catch (_) {}
+}
     );
   } catch (_) {}
 };
@@ -108,7 +111,7 @@ router.get('/:id', async (req, res) => {
 router.get('/:id/historial', async (req, res) => {
   try {
     const [rows] = await db.query(
-      `SELECT * FROM historial WHERE entidad = 'PRODUCTO' AND entidad_id = ? ORDER BY fecha DESC LIMIT 100`,
+      `SELECT h.*, u.nombre AS usuario_nombre FROM historial h LEFT JOIN usuarios u ON u.id = h.usuario_id WHERE h.entidad = 'PRODUCTO' AND h.entidad_id = ? ORDER BY h.fecha DESC LIMIT 100`,
       [req.params.id]
     );
     res.json(rows);

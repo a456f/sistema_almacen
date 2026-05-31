@@ -28,11 +28,14 @@ const traducirError = (err) => {
   return err.message || 'Error en el servidor.';
 };
 
-const registrarHistorial = async (conn, entidad, entidadId, accion, descripcion) => {
+const registrarHistorial = async (conn, entidad, entidadId, accion, descripcion, usuarioId = null) => {
   try {
     await conn.query(
-      'INSERT INTO historial (entidad, entidad_id, accion, descripcion) VALUES (?, ?, ?, ?)',
-      [entidad, entidadId, accion, descripcion]
+      'INSERT INTO historial (entidad, entidad_id, accion, descripcion, usuario_id) VALUES (?, ?, ?, ?, ?)',
+      [entidad, entidadId, accion, descripcion, usuarioId || null]
+    );
+  } catch (_) {}
+}
     );
   } catch (_) { /* no romper la operación principal por historial */ }
 };
@@ -336,7 +339,7 @@ router.get('/:id', async (req, res) => {
 router.get('/:id/historial', async (req, res) => {
   try {
     const [rows] = await db.query(
-      `SELECT * FROM historial WHERE entidad = 'CAJA' AND entidad_id = ? ORDER BY fecha DESC LIMIT 100`,
+      `SELECT h.*, u.nombre AS usuario_nombre FROM historial h LEFT JOIN usuarios u ON u.id = h.usuario_id WHERE h.entidad = 'CAJA' AND h.entidad_id = ? ORDER BY h.fecha DESC LIMIT 100`,
       [req.params.id]
     );
     res.json(rows);
@@ -362,7 +365,7 @@ router.post('/', uploadCaja.array('imagenes', 6), async (req, res) => {
       const valores = archivos.map((f) => [cajaId, f.path.replace(/\\/g, '/')]);
       await conn.query('INSERT INTO caja_imagenes (caja_id, ruta) VALUES ?', [valores]);
     }
-    await registrarHistorial(conn, 'CAJA', cajaId, 'CREADA', `Caja ${codigo_qr.trim()} creada con ${archivos.length} imagen(es)`);
+    await registrarHistorial(conn, 'CAJA', cajaId, 'CREADA', `Caja ${codigo_qr.trim(, req.body?.actor_user_id || null)} creada con ${archivos.length} imagen(es)`);
 
     await conn.commit();
     res.status(201).json({ message: 'Caja registrada.', id: cajaId });
