@@ -2,5 +2,9 @@ node_modules
 dist
 backend/node_modules
 backend/.env
+backend/uploads
 *.log
 .DS_Store
+# TypeScript incremental build cache (se regenera en cada build)
+tsconfig.tsbuildinfo
+*.tsbuildinfo
