@@ -24,6 +24,14 @@ interface Caja {
   imagenes?: ImagenItem[];
   productos?: Producto[];
 }
+interface HistorialEntry {
+  id: number;
+  entidad: string;
+  entidad_id: number;
+  accion: string;
+  descripcion: string | null;
+  fecha: string;
+}
 interface Stats {
   total_cajas: number;
   total_unidades: number;
@@ -75,6 +83,7 @@ const CajasModule = () => {
 
   // Detalle caja con productos
   const [detalleCaja, setDetalleCaja] = useState<Caja | null>(null);
+  const [historial, setHistorial] = useState<HistorialEntry[]>([]);
 
   // Producto
   const [prodModal, setProdModal] = useState(false);
@@ -168,8 +177,12 @@ const CajasModule = () => {
 
   const abrirDetalle = async (id: number) => {
     try {
-      const res = await fetch(`${API_URL}/cajas/${id}`);
-      if (res.ok) setDetalleCaja(await res.json());
+      const [resCaja, resHist] = await Promise.all([
+        fetch(`${API_URL}/cajas/${id}`),
+        fetch(`${API_URL}/cajas/${id}/historial`),
+      ]);
+      if (resCaja.ok) setDetalleCaja(await resCaja.json());
+      setHistorial(resHist.ok ? await resHist.json() : []);
     } catch { notify('No se pudo cargar', 'err'); }
   };
 
@@ -394,6 +407,29 @@ const CajasModule = () => {
                     </div>
                   ))}
                 </div>
+              )}
+
+              {/* Historial */}
+              <div className="hist-section-head">
+                <h4>Historial ({historial.length})</h4>
+              </div>
+              {historial.length === 0 ? (
+                <p className="prod-empty">Sin eventos registrados</p>
+              ) : (
+                <ul className="hist-timeline">
+                  {historial.map((h) => (
+                    <li key={h.id} className="hist-item">
+                      <div className="hist-dot" />
+                      <div className="hist-content">
+                        <div className="hist-head">
+                          <span className="hist-accion">{h.accion.replace('_', ' ')}</span>
+                          <time>{new Date(h.fecha).toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</time>
+                        </div>
+                        {h.descripcion && <p>{h.descripcion}</p>}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
           </div>

@@ -193,6 +193,49 @@
 }
 .caja-detalle-chips { display: flex; gap: 6px; margin-bottom: 12px; }
 
+/* Historial timeline */
+.hist-section-head {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border);
+}
+.hist-section-head h4 { font-size: 0.95rem; color: #0f172a; }
+.hist-timeline {
+  list-style: none; margin: 12px 0 0; padding: 0;
+  position: relative;
+}
+.hist-timeline::before {
+  content: ''; position: absolute;
+  left: 9px; top: 6px; bottom: 6px;
+  width: 2px; background: var(--border);
+}
+.hist-item {
+  position: relative; padding: 0 0 14px 28px;
+}
+.hist-dot {
+  position: absolute; left: 4px; top: 6px;
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 0 0 3px #eff6ff;
+}
+.hist-content {
+  background: #f8fafc; border: 1px solid var(--border);
+  border-radius: 10px; padding: 8px 12px;
+}
+.hist-head {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 8px; flex-wrap: wrap;
+}
+.hist-accion {
+  font-size: 0.72rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.5px;
+  background: #dbeafe; color: #1d4ed8;
+  padding: 2px 8px; border-radius: 999px;
+}
+.hist-head time { font-size: 0.74rem; color: var(--text-muted); }
+.hist-content p {
+  margin: 4px 0 0; font-size: 0.84rem; color: var(--text);
+}
+
 /* Producto en detalle */
 .prod-meta {
   display: flex; gap: 12px; flex-wrap: wrap;
