@@ -87,6 +87,7 @@ const CajasModule = () => {
   // Detalle caja con productos
   const [detalleCaja, setDetalleCaja] = useState<Caja | null>(null);
   const [historial, setHistorial] = useState<HistorialEntry[]>([]);
+  const [verHistorial, setVerHistorial] = useState(false);
 
   // Producto
   const [prodModal, setProdModal] = useState(false);
@@ -95,6 +96,11 @@ const CajasModule = () => {
   const [verMasDetalles, setVerMasDetalles] = useState(false);
 
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
+  const [confirmar, setConfirmar] = useState<{
+    titulo: string; mensaje: string; onOk: () => void; peligro?: boolean;
+  } | null>(null);
+  const pedirConfirm = (titulo: string, mensaje: string, onOk: () => void, peligro = true) =>
+    setConfirmar({ titulo, mensaje, onOk, peligro });
   const notify = (msg: string, type: 'ok' | 'err' = 'ok') => {
     setToast({ msg, type }); setTimeout(() => setToast(null), 2800);
   };
@@ -181,17 +187,21 @@ const CajasModule = () => {
     } catch (err: any) { notify(err.message, 'err'); }
   };
 
-  const eliminarCaja = async (c: Caja) => {
-    if (!window.confirm(`¿Eliminar la caja ${c.codigo_qr} y todos sus productos?`)) return;
-    try {
-      const res = await fetch(`${API_URL}/cajas/${c.id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error();
-      notify('Caja eliminada');
-      cargarCajas(); cargarStats();
-    } catch { notify('No se pudo eliminar', 'err'); }
-  };
+  const eliminarCaja = (c: Caja) => pedirConfirm(
+    'Eliminar caja',
+    `¿Eliminar la caja ${c.codigo_qr} y todos sus productos? Esta acción no se puede deshacer.`,
+    async () => {
+      try {
+        const res = await fetch(`${API_URL}/cajas/${c.id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error();
+        notify('Caja eliminada');
+        cargarCajas(); cargarStats();
+      } catch { notify('No se pudo eliminar', 'err'); }
+    }
+  );
 
   const abrirDetalle = async (id: number) => {
+    setVerHistorial(false); // colapsado por defecto
     try {
       const [resCaja, resHist] = await Promise.all([
         fetch(`${API_URL}/cajas/${id}`),
@@ -211,8 +221,21 @@ const CajasModule = () => {
     e.preventDefault();
     if (!detalleCaja) return;
     if (prodImgs.length > 6) { notify('Máximo 6 fotos', 'err'); return; }
-    if (prodImgs.length > 0 && prodImgs.length < 3
-      && !window.confirm(`Recomendamos al menos 3 fotos. Subiste ${prodImgs.length}. ¿Continuar?`)) return;
+    // Aviso suave si tiene menos de 3 fotos pero no bloqueamos
+    if (prodImgs.length > 0 && prodImgs.length < 3) {
+      pedirConfirm(
+        'Pocas fotos',
+        `Se recomiendan al menos 3 fotos del producto. Subiste ${prodImgs.length}. ¿Continuar de todas formas?`,
+        () => continuarGuardarProducto(),
+        false
+      );
+      return;
+    }
+    continuarGuardarProducto();
+  };
+
+  const continuarGuardarProducto = async () => {
+    if (!detalleCaja) return;
 
     const fd = new FormData();
     fd.append('caja_id', String(detalleCaja.id));
@@ -229,24 +252,30 @@ const CajasModule = () => {
     } catch (err: any) { notify(err.message, 'err'); }
   };
 
-  const eliminarProducto = async (p: Producto) => {
-    if (!window.confirm(`¿Eliminar producto "${p.nombre}"?`)) return;
-    try {
-      const res = await fetch(`${API_URL}/productos/${p.id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error();
-      notify('Producto eliminado');
-      recargarDetalle(); cargarCajas(); cargarStats();
-    } catch { notify('No se pudo eliminar', 'err'); }
-  };
+  const eliminarProducto = (p: Producto) => pedirConfirm(
+    'Eliminar producto',
+    `¿Eliminar "${p.nombre}"?`,
+    async () => {
+      try {
+        const res = await fetch(`${API_URL}/productos/${p.id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error();
+        notify('Producto eliminado');
+        recargarDetalle(); cargarCajas(); cargarStats();
+      } catch { notify('No se pudo eliminar', 'err'); }
+    }
+  );
 
-  const eliminarImagenCaja = async (cajaId: number, imgId: number) => {
-    if (!window.confirm('¿Eliminar esta imagen?')) return;
-    try {
-      const res = await fetch(`${API_URL}/cajas/${cajaId}/imagen/${imgId}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error();
-      recargarDetalle();
-    } catch { notify('No se pudo eliminar', 'err'); }
-  };
+  const eliminarImagenCaja = (cajaId: number, imgId: number) => pedirConfirm(
+    'Eliminar imagen',
+    '¿Eliminar esta imagen?',
+    async () => {
+      try {
+        const res = await fetch(`${API_URL}/cajas/${cajaId}/imagen/${imgId}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error();
+        recargarDetalle();
+      } catch { notify('No se pudo eliminar', 'err'); }
+    }
+  );
 
   const estadoBadge = (estado: string) => (
     <span className="cajas-estado" style={{
@@ -432,27 +461,34 @@ const CajasModule = () => {
                 </div>
               )}
 
-              {/* Historial */}
-              <div className="hist-section-head">
-                <h4>Historial ({historial.length})</h4>
-              </div>
-              {historial.length === 0 ? (
-                <p className="prod-empty">Sin eventos registrados</p>
-              ) : (
-                <ul className="hist-timeline">
-                  {historial.map((h) => (
-                    <li key={h.id} className="hist-item">
-                      <div className="hist-dot" />
-                      <div className="hist-content">
-                        <div className="hist-head">
-                          <span className="hist-accion">{h.accion.replace('_', ' ')}</span>
-                          <time>{new Date(h.fecha).toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</time>
+              {/* Historial — colapsable */}
+              <button
+                type="button"
+                className="hist-toggle-btn"
+                onClick={() => setVerHistorial((v) => !v)}
+              >
+                <span>Historial ({historial.length})</span>
+                <span className="hist-toggle-arrow">{verHistorial ? '−' : '+'}</span>
+              </button>
+              {verHistorial && (
+                historial.length === 0 ? (
+                  <p className="prod-empty">Sin eventos registrados</p>
+                ) : (
+                  <ul className="hist-timeline">
+                    {historial.map((h) => (
+                      <li key={h.id} className="hist-item">
+                        <div className="hist-dot" />
+                        <div className="hist-content">
+                          <div className="hist-head">
+                            <span className="hist-accion">{h.accion.replace('_', ' ')}</span>
+                            <time>{new Date(h.fecha).toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</time>
+                          </div>
+                          {h.descripcion && <p>{h.descripcion}</p>}
                         </div>
-                        {h.descripcion && <p>{h.descripcion}</p>}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+                      </li>
+                    ))}
+                  </ul>
+                )
               )}
             </div>
           </div>
@@ -527,6 +563,29 @@ const CajasModule = () => {
                 <button type="submit" className="primary">Registrar producto</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm dialog bonito */}
+      {confirmar && (
+        <div className="cajas-overlay" onClick={() => setConfirmar(null)}>
+          <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className={`confirm-icon ${confirmar.peligro ? 'danger' : 'info'}`}>
+              {confirmar.peligro ? '!' : '?'}
+            </div>
+            <h3>{confirmar.titulo}</h3>
+            <p>{confirmar.mensaje}</p>
+            <div className="confirm-actions">
+              <button onClick={() => setConfirmar(null)}>Cancelar</button>
+              <button
+                className={confirmar.peligro ? 'danger' : 'primary'}
+                onClick={() => { const fn = confirmar.onOk; setConfirmar(null); fn(); }}
+                autoFocus
+              >
+                {confirmar.peligro ? 'Eliminar' : 'Continuar'}
+              </button>
+            </div>
           </div>
         </div>
       )}

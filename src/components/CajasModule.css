@@ -203,11 +203,28 @@
 .caja-detalle-chips { display: flex; gap: 6px; margin-bottom: 12px; }
 
 /* Historial timeline */
-.hist-section-head {
+.hist-toggle-btn {
   display: flex; justify-content: space-between; align-items: center;
-  margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border);
+  width: 100%;
+  margin-top: 22px;
+  padding: 12px 14px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #0f172a;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s;
 }
-.hist-section-head h4 { font-size: 0.95rem; color: #0f172a; }
+.hist-toggle-btn:hover { background: #f1f5f9; }
+.hist-toggle-arrow {
+  width: 24px; height: 24px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #fff; border-radius: 6px;
+  font-size: 1.1rem; color: var(--text-muted);
+}
 .hist-timeline {
   list-style: none; margin: 12px 0 0; padding: 0;
   position: relative;
@@ -486,3 +503,34 @@
 @media (max-width: 620px) {
   .cajas-form-grid { grid-template-columns: 1fr; }
 }
+
+/* Confirm dialog (reemplaza window.confirm) */
+.confirm-dialog {
+  background: var(--bg-card);
+  border-radius: 18px;
+  width: 100%; max-width: 420px;
+  padding: 26px 26px 20px;
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.3);
+  animation: modalIn 0.22s ease;
+  text-align: center;
+}
+.confirm-icon {
+  width: 60px; height: 60px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 14px;
+  font-size: 28px; font-weight: 800; color: #fff;
+}
+.confirm-icon.danger { background: linear-gradient(135deg, #ef4444, #dc2626); }
+.confirm-icon.info { background: linear-gradient(135deg, #f59e0b, #d97706); }
+.confirm-dialog h3 { font-size: 1.1rem; color: #0f172a; margin-bottom: 6px; }
+.confirm-dialog p { font-size: 0.92rem; color: var(--text-muted); margin-bottom: 22px; line-height: 1.4; }
+.confirm-actions { display: flex; gap: 10px; justify-content: center; }
+.confirm-actions button {
+  flex: 1; padding: 11px 18px;
+  border: 1px solid var(--border); background: var(--bg-card);
+  border-radius: 10px; font-size: 0.92rem; font-weight: 700;
+  cursor: pointer; color: var(--text); font-family: inherit;
+}
+.confirm-actions button.danger { background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; border: none; }
+.confirm-actions button.primary { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; border: none; }
