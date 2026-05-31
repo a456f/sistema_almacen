@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { API_URL, BASE_URL } from '../config/api';
 import './CajasModule.css';
 import { resizeImageFiles } from '../utils/image';
@@ -563,76 +563,85 @@ const CajasModule = () => {
                   </span>
                 </button>
               ) : (
-                <div className="prod-list">
-                  {productosCaja.map((p) => (
-                    <div key={p.id} className="prod-card-wrap">
-                    <div className="prod-card">
-                      <div className="prod-imgs">
-                        {p.imagenes && p.imagenes.length > 0
-                          ? p.imagenes.slice(0, 3).map((im, i) => {
-                              const urls = p.imagenes!.map((x) => fileUrl(x.ruta));
-                              const extra = (p.imagenes!.length > 3 && i === 2) ? p.imagenes!.length - 3 : 0;
-                              return (
-                                <div key={im.id} className="prod-img-wrap" onClick={(e) => { e.stopPropagation(); abrirViewer(urls, i, [`${p.nombre} - foto ${i+1}`]); }}>
-                                  <img src={fileUrl(im.ruta)} alt="" loading="lazy" />
-                                  {extra > 0 && <span className="prod-img-overlay">+{extra}</span>}
-                                </div>
-                              );
-                            })
-                          : <div className="prod-img-ph">{Icon.image}</div>}
-                      </div>
-                      <div className="prod-body">
-                        <div className="prod-head">
-                          <strong>{p.nombre}</strong>
-                          {estadoBadge(p.estado)}
-                        </div>
-                        <div className="prod-meta">
-                          {p.marca && <span><b>Marca:</b> {p.marca}</span>}
-                          {p.modelo && <span><b>Modelo:</b> {p.modelo}</span>}
-                          {p.tipo && <span><b>Tipo:</b> {p.tipo}</span>}
-                          {p.cantidad > 1 && <span><b>Cant.:</b> {p.cantidad}</span>}
-                        </div>
-                        {p.categoria_nombre && (
-                          <span className="cajas-badge" style={{ background: (p.categoria_color || '#64748b') + '22', color: p.categoria_color || '#334155' }}>
-                            {p.categoria_nombre}
-                          </span>
-                        )}
-                        {p.numero_serie && <code className="prod-sn">S/N: {p.numero_serie}</code>}
-                      </div>
-                      <div className="prod-card-actions">
-                        <button className="prod-edit-btn" onClick={() => abrirEditarProducto(p)} title="Ver y editar detalles">
-                          {Icon.edit} Editar
-                        </button>
-                        <button className="prod-hist-btn" onClick={() => toggleHistorialProducto(p.id)} title="Ver historial">
-                          {prodHistId === p.id ? 'Ocultar' : 'Historial'}
-                        </button>
-                        <button className="prod-del" onClick={() => eliminarProducto(p)} title="Eliminar producto">{Icon.trash}</button>
-                      </div>
-                    </div>
-                    {prodHistId === p.id && (
-                      <div className="prod-hist-inline">
-                        {prodHist.length === 0 ? (
-                          <p className="prod-hist-empty">Sin eventos registrados para este producto</p>
-                        ) : (
-                          <ul className="hist-timeline">
-                            {prodHist.map((h) => (
-                              <li key={h.id} className="hist-item">
-                                <div className="hist-dot" />
-                                <div className="hist-content">
-                                  <div className="hist-head">
-                                    <span className="hist-accion">{h.accion.replace('_', ' ')}</span>
-                                    <time>{new Date(h.fecha).toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</time>
+                <div className="prod-table-wrap">
+                  <table className="prod-table">
+                    <thead>
+                      <tr>
+                        <th>Producto</th>
+                        <th>Marca / Modelo</th>
+                        <th>Tipo</th>
+                        <th>S/N</th>
+                        <th>Categoría</th>
+                        <th>Estado</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {productosCaja.map((p) => (
+                        <React.Fragment key={p.id}>
+                          <tr className="prod-tr">
+                            <td>
+                              <div className="prod-cell-nombre">
+                                {p.imagenes && p.imagenes.length > 0 ? (
+                                  <div className="prod-tr-img" onClick={() => abrirViewer(p.imagenes!.map((x) => fileUrl(x.ruta)), 0)}>
+                                    <img src={fileUrl(p.imagenes[0].ruta)} alt="" loading="lazy" />
+                                    {p.imagenes.length > 1 && <span className="prod-tr-imgcount">+{p.imagenes.length - 1}</span>}
                                   </div>
-                                  {h.descripcion && <p>{h.descripcion}</p>}
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                    )}
-                    </div>
-                  ))}
+                                ) : (
+                                  <div className="prod-tr-img placeholder">{Icon.image}</div>
+                                )}
+                                <strong>{p.nombre}</strong>
+                              </div>
+                            </td>
+                            <td>
+                              {p.marca || p.modelo
+                                ? <span>{p.marca || '—'}{p.modelo ? ` · ${p.modelo}` : ''}</span>
+                                : '—'}
+                            </td>
+                            <td className="prod-tr-tipo">{p.tipo || '—'}</td>
+                            <td>{p.numero_serie ? <code className="prod-sn">{p.numero_serie}</code> : '—'}</td>
+                            <td>
+                              {p.categoria_nombre ? (
+                                <span className="cajas-badge" style={{ background: (p.categoria_color || '#64748b') + '22', color: p.categoria_color || '#334155' }}>
+                                  {p.categoria_nombre}
+                                </span>
+                              ) : '—'}
+                            </td>
+                            <td>{estadoBadge(p.estado)}</td>
+                            <td className="prod-tr-actions">
+                              <button className="prod-edit-btn" onClick={() => abrirEditarProducto(p)} title="Ver y editar">{Icon.edit}</button>
+                              <button className="prod-hist-btn" onClick={() => toggleHistorialProducto(p.id)} title="Ver historial">⌚</button>
+                              <button className="prod-del" onClick={() => eliminarProducto(p)} title="Eliminar">{Icon.trash}</button>
+                            </td>
+                          </tr>
+                          {prodHistId === p.id && (
+                            <tr className="prod-tr-hist">
+                              <td colSpan={7}>
+                                {prodHist.length === 0 ? (
+                                  <p className="prod-hist-empty">Sin eventos registrados para este producto</p>
+                                ) : (
+                                  <ul className="hist-timeline">
+                                    {prodHist.map((h) => (
+                                      <li key={h.id} className="hist-item">
+                                        <div className="hist-dot" />
+                                        <div className="hist-content">
+                                          <div className="hist-head">
+                                            <span className="hist-accion">{h.accion.replace('_', ' ')}</span>
+                                            <time>{new Date(h.fecha).toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</time>
+                                          </div>
+                                          {h.descripcion && <p>{h.descripcion}</p>}
+                                        </div>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
 
