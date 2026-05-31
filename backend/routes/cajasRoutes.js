@@ -177,6 +177,99 @@ router.get('/export/excel', async (_req, res) => {
   }
 });
 
+// ── Exportar UNA caja con todos sus productos al detalle ──
+router.get('/:id/export/excel', async (req, res) => {
+  try {
+    const [[caja]] = await db.query('SELECT * FROM cajas WHERE id = ?', [req.params.id]);
+    if (!caja) return res.status(404).json({ error: 'Caja no encontrada' });
+    const [productos] = await db.query(`
+      SELECT p.id, p.nombre, p.numero_serie, cat.nombre AS categoria,
+             p.marca, p.modelo, p.tipo, p.descripcion, p.uso, p.caracteristicas,
+             p.estado, p.cantidad,
+             (SELECT COUNT(*) FROM producto_imagenes WHERE producto_id = p.id) AS total_fotos,
+             p.fecha_registro, p.fecha_actualizacion
+      FROM productos p
+      LEFT JOIN categorias cat ON cat.id = p.categoria_id
+      WHERE p.caja_id = ?
+      ORDER BY p.id`, [req.params.id]);
+    const [historial] = await db.query(`
+      SELECT accion, descripcion, fecha
+      FROM historial WHERE entidad='CAJA' AND entidad_id = ?
+      UNION ALL
+      SELECT CONCAT('PROD:', accion), descripcion, fecha
+      FROM historial WHERE entidad='PRODUCTO' AND entidad_id IN (SELECT id FROM productos WHERE caja_id = ?)
+      ORDER BY fecha DESC LIMIT 500`,
+      [req.params.id, req.params.id]);
+
+    const wb = new ExcelJS.Workbook();
+    const headerStyle = {
+      font: { bold: true, color: { argb: 'FFFFFFFF' } },
+      fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2563EB' } },
+    };
+
+    // Hoja 1: Resumen de la caja
+    const wsR = wb.addWorksheet('Caja');
+    wsR.columns = [
+      { header: 'Campo', key: 'k', width: 22 },
+      { header: 'Valor', key: 'v', width: 60 },
+    ];
+    wsR.getRow(1).eachCell((c) => Object.assign(c, headerStyle));
+    wsR.addRows([
+      { k: 'ID', v: caja.id },
+      { k: 'Código QR', v: caja.codigo_qr },
+      { k: 'Estado', v: caja.estado },
+      { k: 'Unidades', v: caja.cantidad },
+      { k: 'Productos', v: productos.length },
+      { k: 'Detalles', v: caja.detalles || '' },
+      { k: 'Registrada', v: caja.fecha_registro },
+      { k: 'Actualizada', v: caja.fecha_actualizacion || '' },
+    ]);
+    wsR.getColumn('k').font = { bold: true };
+
+    // Hoja 2: Productos de esta caja
+    const wsP = wb.addWorksheet('Productos');
+    wsP.columns = [
+      { header: 'ID', key: 'id', width: 6 },
+      { header: 'Nombre', key: 'nombre', width: 26 },
+      { header: 'N° de serie', key: 'numero_serie', width: 18 },
+      { header: 'Categoría', key: 'categoria', width: 22 },
+      { header: 'Marca', key: 'marca', width: 18 },
+      { header: 'Modelo', key: 'modelo', width: 18 },
+      { header: 'Tipo', key: 'tipo', width: 22 },
+      { header: 'Descripción', key: 'descripcion', width: 35 },
+      { header: 'Uso', key: 'uso', width: 25 },
+      { header: 'Características', key: 'caracteristicas', width: 40 },
+      { header: 'Estado', key: 'estado', width: 12 },
+      { header: 'Cantidad', key: 'cantidad', width: 10 },
+      { header: 'Fotos', key: 'total_fotos', width: 8 },
+      { header: 'Registrado', key: 'fecha_registro', width: 18 },
+      { header: 'Actualizado', key: 'fecha_actualizacion', width: 18 },
+    ];
+    wsP.getRow(1).eachCell((c) => Object.assign(c, headerStyle));
+    wsP.addRows(productos);
+    wsP.autoFilter = { from: 'A1', to: 'O1' };
+
+    // Hoja 3: Historial completo (caja + sus productos)
+    const wsH = wb.addWorksheet('Historial');
+    wsH.columns = [
+      { header: 'Acción', key: 'accion', width: 24 },
+      { header: 'Descripción', key: 'descripcion', width: 60 },
+      { header: 'Fecha', key: 'fecha', width: 20 },
+    ];
+    wsH.getRow(1).eachCell((c) => Object.assign(c, headerStyle));
+    wsH.addRows(historial);
+    wsH.autoFilter = { from: 'A1', to: 'C1' };
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${caja.codigo_qr}_detalle.xlsx"`);
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('Export caja error:', err);
+    res.status(500).json({ error: 'No se pudo generar el Excel de la caja' });
+  }
+});
+
 // ── Categorías ──
 router.get('/categorias', async (_req, res) => {
   try {
@@ -221,7 +314,7 @@ router.get('/', async (req, res) => {
   } catch (err) { res.status(500).json({ error: traducirError(err) }); }
 });
 
-// ── Detalle de caja (con imágenes y productos) ──
+// ── Detalle de caja (solo caja + imágenes; productos vienen paginados aparte) ──
 router.get('/:id', async (req, res) => {
   try {
     const [[caja]] = await db.query('SELECT * FROM cajas WHERE id = ?', [req.params.id]);
@@ -230,15 +323,11 @@ router.get('/:id', async (req, res) => {
       'SELECT id, ruta FROM caja_imagenes WHERE caja_id = ? ORDER BY id',
       [req.params.id]
     );
-    const [productos] = await db.query(
-      `SELECT p.*, cat.nombre AS categoria_nombre, cat.color AS categoria_color,
-              (SELECT COUNT(*) FROM producto_imagenes WHERE producto_id = p.id) AS total_imagenes
-       FROM productos p
-       LEFT JOIN categorias cat ON cat.id = p.categoria_id
-       WHERE p.caja_id = ? ORDER BY p.id DESC`,
+    const [[{ total_productos }]] = await db.query(
+      'SELECT COUNT(*) AS total_productos FROM productos WHERE caja_id = ?',
       [req.params.id]
     );
-    res.json({ ...caja, imagenes, productos });
+    res.json({ ...caja, imagenes, total_productos });
   } catch (err) { res.status(500).json({ error: traducirError(err) }); }
 });
 

@@ -45,20 +45,35 @@ const fetchImagenes = async (productoId) => {
   return imgs;
 };
 
-// ── Listar productos de una caja ──
+// ── Listar productos de una caja (paginado) ──
 router.get('/caja/:cajaId', async (req, res) => {
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 10));
+  const offset = (page - 1) * limit;
   try {
+    const [[{ total }]] = await db.query(
+      'SELECT COUNT(*) AS total FROM productos WHERE caja_id = ?',
+      [req.params.cajaId]
+    );
     const [productos] = await db.query(
       `SELECT p.*, cat.nombre AS categoria_nombre, cat.color AS categoria_color
        FROM productos p
        LEFT JOIN categorias cat ON cat.id = p.categoria_id
-       WHERE p.caja_id = ? ORDER BY p.id DESC`,
-      [req.params.cajaId]
+       WHERE p.caja_id = ?
+       ORDER BY p.id DESC
+       LIMIT ? OFFSET ?`,
+      [req.params.cajaId, limit, offset]
     );
     const conImagenes = await Promise.all(
       productos.map(async (p) => ({ ...p, imagenes: await fetchImagenes(p.id) }))
     );
-    res.json(conImagenes);
+    res.json({
+      data: conImagenes,
+      total,
+      page,
+      limit,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    });
   } catch (err) { res.status(500).json({ error: traducirError(err) }); }
 });
 

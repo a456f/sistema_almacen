@@ -93,6 +93,12 @@ const CajasModule = () => {
   // Historial por producto (uno expandido a la vez)
   const [prodHistId, setProdHistId] = useState<number | null>(null);
   const [prodHist, setProdHist] = useState<HistorialEntry[]>([]);
+  // Productos paginados de la caja abierta
+  const [productosCaja, setProductosCaja] = useState<Producto[]>([]);
+  const [productosTotal, setProductosTotal] = useState(0);
+  const [productosPage, setProductosPage] = useState(1);
+  const [productosTotalPages, setProductosTotalPages] = useState(1);
+  const PRODS_LIMIT = 10;
   // Cache de detalles ya cargados (para prefetch en hover)
   const detalleCache = useRef<Map<number, { caja: Caja; hist: HistorialEntry[]; ts: number }>>(new Map());
 
@@ -224,6 +230,20 @@ const CajasModule = () => {
     }).catch(() => {});
   };
 
+  const cargarProductosCaja = async (cajaId: number, page = 1) => {
+    try {
+      const url = `${API_URL}/productos/caja/${cajaId}?page=${page}&limit=${PRODS_LIMIT}`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        setProductosCaja(data.data || []);
+        setProductosTotal(data.total || 0);
+        setProductosPage(data.page || 1);
+        setProductosTotalPages(data.totalPages || 1);
+      }
+    } catch {}
+  };
+
   const abrirDetalle = async (id: number) => {
     setVerHistorial(false);
     // Si tenemos cache fresco, mostramos al instante
@@ -231,6 +251,7 @@ const CajasModule = () => {
     if (cached && Date.now() - cached.ts < 30000) {
       setDetalleCaja(cached.caja);
       setHistorial(cached.hist);
+      cargarProductosCaja(id, 1);
       return;
     }
     try {
@@ -244,6 +265,7 @@ const CajasModule = () => {
         setDetalleCaja(caja);
         setHistorial(hist);
         detalleCache.current.set(id, { caja, hist, ts: Date.now() });
+        cargarProductosCaja(id, 1);
       }
     } catch { notify('No se pudo cargar', 'err'); }
   };
@@ -284,9 +306,8 @@ const CajasModule = () => {
       if (!res.ok) throw new Error(data.error || 'No se pudo guardar');
       setProdModal(false);
       notify('Producto registrado');
-      // Refrescamos en segundo plano para conseguir las imágenes finales
-      recargarDetalle(); cargarCajas(); cargarStats();
-      // (no esperamos a nada — la UI ya se cerró)
+      if (detalleCaja) cargarProductosCaja(detalleCaja.id, 1);
+      cargarCajas(); cargarStats();
     } catch (err: any) { notify(err.message, 'err'); }
   };
 
@@ -294,11 +315,12 @@ const CajasModule = () => {
     'Eliminar producto',
     `¿Eliminar "${p.nombre}"?`,
     async () => {
-      // Optimistic UI: quitar de la lista local antes de la respuesta
+      // Optimistic UI: quitar de la lista paginada local
+      setProductosCaja((prev) => prev.filter((x) => x.id !== p.id));
+      setProductosTotal((t) => Math.max(0, t - 1));
       if (detalleCaja) {
         setDetalleCaja({
           ...detalleCaja,
-          productos: (detalleCaja.productos || []).filter(x => x.id !== p.id),
           cantidad: Math.max(0, detalleCaja.cantidad - p.cantidad),
         });
       }
@@ -309,7 +331,7 @@ const CajasModule = () => {
         cargarCajas(); cargarStats();
       } catch {
         notify('No se pudo eliminar', 'err');
-        recargarDetalle(); // rollback al estado real
+        if (detalleCaja) cargarProductosCaja(detalleCaja.id, productosPage); // rollback
       }
     }
   );
@@ -456,7 +478,10 @@ const CajasModule = () => {
                 <span className="caja-qr-pill">{Icon.qr} {detalleCaja.codigo_qr}</span>
                 <small style={{ marginLeft: 10 }}>{detalleCaja.cantidad} unidades</small>
               </h3>
-              <button onClick={() => setDetalleCaja(null)}>{Icon.close}</button>
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <a className="cajas-export" style={{ padding: "0.45rem 0.85rem", fontSize: "0.78rem" }} href={`${BASE_URL}/api/cajas/${detalleCaja.id}/export/excel`} target="_blank" rel="noopener noreferrer" title="Descargar esta caja con todos sus productos">{Icon.download} Excel</a>
+                <button onClick={() => setDetalleCaja(null)}>{Icon.close}</button>
+              </div>
             </div>
             <div className="cajas-detalle">
               <div className="caja-imgs-row">
@@ -475,11 +500,11 @@ const CajasModule = () => {
               {detalleCaja.detalles && <Field label="Detalles" value={detalleCaja.detalles} pre />}
 
               <div className="prod-section-head">
-                <h4>Productos ({detalleCaja.productos?.length ?? 0})</h4>
+                <h4>Productos ({productosTotal})</h4>
                 <button className="cajas-add small" onClick={abrirNuevoProducto}>{Icon.plus} Agregar producto</button>
               </div>
 
-              {(detalleCaja.productos?.length ?? 0) === 0 ? (
+              {productosTotal === 0 ? (
                 <button type="button" className="prod-empty-cta" onClick={abrirNuevoProducto}>
                   <span className="prod-empty-icon">{Icon.plus}</span>
                   <span>
@@ -489,7 +514,7 @@ const CajasModule = () => {
                 </button>
               ) : (
                 <div className="prod-list">
-                  {detalleCaja.productos!.map((p) => (
+                  {productosCaja.map((p) => (
                     <div key={p.id} className="prod-card-wrap">
                     <div className="prod-card">
                       <div className="prod-imgs">
@@ -546,6 +571,18 @@ const CajasModule = () => {
                     )}
                     </div>
                   ))}
+                </div>
+              )}
+
+              {productosTotalPages > 1 && (
+                <div className="cajas-pagination" style={{ marginTop: 12 }}>
+                  <span>{productosTotal} productos · página {productosPage} de {productosTotalPages}</span>
+                  <div>
+                    <button disabled={productosPage <= 1}
+                      onClick={() => detalleCaja && cargarProductosCaja(detalleCaja.id, productosPage - 1)}>Anterior</button>
+                    <button disabled={productosPage >= productosTotalPages}
+                      onClick={() => detalleCaja && cargarProductosCaja(detalleCaja.id, productosPage + 1)}>Siguiente</button>
+                  </div>
                 </div>
               )}
 
