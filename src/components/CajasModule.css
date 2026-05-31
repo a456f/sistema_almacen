@@ -565,3 +565,18 @@
 .prod-hist-inline .hist-item { padding-bottom: 10px; }
 .prod-hist-inline .hist-content { padding: 6px 10px; }
 .prod-hist-empty { color: var(--text-muted); font-size: 0.82rem; padding: 8px 0; }
+
+/* Botón de exportar Excel */
+.cajas-export {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 0.65rem 1.1rem;
+  background: linear-gradient(135deg, #16a34a, #15803d);
+  color: #fff;
+  border-radius: 10px;
+  font-size: 0.86rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: filter 0.15s;
+  cursor: pointer;
+}
+.cajas-export:hover { filter: brightness(1.08); }

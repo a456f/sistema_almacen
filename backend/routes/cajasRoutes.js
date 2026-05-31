@@ -1,5 +1,6 @@
 import express from 'express';
 import multer from 'multer';
+import ExcelJS from 'exceljs';
 import fs from 'fs';
 import path from 'path';
 import { db } from '../db.js';
@@ -66,6 +67,114 @@ router.get('/siguiente-qr', async (_req, res) => {
     }
     res.json({ codigo_qr: `QR-${String(next).padStart(3, '0')}` });
   } catch (err) { res.status(500).json({ error: traducirError(err) }); }
+});
+
+// ── Exportar a Excel (Cajas + Productos + Historial) ──
+router.get('/export/excel', async (_req, res) => {
+  try {
+    const [cajas] = await db.query(`
+      SELECT c.id, c.codigo_qr, c.estado, c.cantidad, c.detalles,
+             (SELECT COUNT(*) FROM productos p WHERE p.caja_id = c.id) AS total_productos,
+             c.fecha_registro, c.fecha_actualizacion
+      FROM cajas c ORDER BY c.id
+    `);
+    const [productos] = await db.query(`
+      SELECT p.id, p.caja_id, c.codigo_qr AS caja_qr,
+             p.nombre, p.numero_serie, cat.nombre AS categoria,
+             p.marca, p.modelo, p.tipo, p.descripcion, p.uso, p.caracteristicas,
+             p.estado, p.cantidad,
+             (SELECT COUNT(*) FROM producto_imagenes WHERE producto_id = p.id) AS total_fotos,
+             p.fecha_registro, p.fecha_actualizacion
+      FROM productos p
+      LEFT JOIN cajas c ON c.id = p.caja_id
+      LEFT JOIN categorias cat ON cat.id = p.categoria_id
+      ORDER BY p.id
+    `);
+    const [historial] = await db.query(`
+      SELECT h.id, h.entidad, h.entidad_id, h.accion, h.descripcion, h.fecha
+      FROM historial h ORDER BY h.id DESC LIMIT 5000
+    `);
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Sistema de Inventario';
+    wb.created = new Date();
+
+    // Estilos comunes
+    const headerStyle = {
+      font: { bold: true, color: { argb: 'FFFFFFFF' } },
+      fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2563EB' } },
+      alignment: { vertical: 'middle', horizontal: 'left' },
+    };
+
+    // Hoja 1: Cajas
+    const wsC = wb.addWorksheet('Cajas');
+    wsC.columns = [
+      { header: 'ID', key: 'id', width: 6 },
+      { header: 'Código QR', key: 'codigo_qr', width: 16 },
+      { header: 'Estado', key: 'estado', width: 14 },
+      { header: 'Unidades', key: 'cantidad', width: 10 },
+      { header: 'Productos', key: 'total_productos', width: 11 },
+      { header: 'Detalles', key: 'detalles', width: 40 },
+      { header: 'Registrada', key: 'fecha_registro', width: 18 },
+      { header: 'Actualizada', key: 'fecha_actualizacion', width: 18 },
+    ];
+    wsC.getRow(1).eachCell((cell) => Object.assign(cell, headerStyle));
+    wsC.addRows(cajas);
+    wsC.autoFilter = { from: 'A1', to: 'H1' };
+
+    // Hoja 2: Productos
+    const wsP = wb.addWorksheet('Productos');
+    wsP.columns = [
+      { header: 'ID', key: 'id', width: 6 },
+      { header: 'Caja QR', key: 'caja_qr', width: 14 },
+      { header: 'Nombre', key: 'nombre', width: 26 },
+      { header: 'N° de serie', key: 'numero_serie', width: 18 },
+      { header: 'Categoría', key: 'categoria', width: 22 },
+      { header: 'Marca', key: 'marca', width: 18 },
+      { header: 'Modelo', key: 'modelo', width: 18 },
+      { header: 'Tipo', key: 'tipo', width: 22 },
+      { header: 'Descripción', key: 'descripcion', width: 35 },
+      { header: 'Uso', key: 'uso', width: 25 },
+      { header: 'Características', key: 'caracteristicas', width: 40 },
+      { header: 'Estado', key: 'estado', width: 12 },
+      { header: 'Cantidad', key: 'cantidad', width: 10 },
+      { header: 'Fotos', key: 'total_fotos', width: 8 },
+      { header: 'Registrado', key: 'fecha_registro', width: 18 },
+      { header: 'Actualizado', key: 'fecha_actualizacion', width: 18 },
+    ];
+    wsP.getRow(1).eachCell((cell) => Object.assign(cell, headerStyle));
+    wsP.addRows(productos);
+    wsP.autoFilter = { from: 'A1', to: 'P1' };
+
+    // Hoja 3: Historial
+    const wsH = wb.addWorksheet('Historial');
+    wsH.columns = [
+      { header: 'ID', key: 'id', width: 7 },
+      { header: 'Entidad', key: 'entidad', width: 11 },
+      { header: 'ID entidad', key: 'entidad_id', width: 11 },
+      { header: 'Acción', key: 'accion', width: 22 },
+      { header: 'Descripción', key: 'descripcion', width: 50 },
+      { header: 'Fecha', key: 'fecha', width: 20 },
+    ];
+    wsH.getRow(1).eachCell((cell) => Object.assign(cell, headerStyle));
+    wsH.addRows(historial);
+    wsH.autoFilter = { from: 'A1', to: 'F1' };
+
+    const fecha = new Date().toISOString().slice(0, 10);
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="inventario_${fecha}.xlsx"`
+    );
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('Export error:', err);
+    res.status(500).json({ error: 'No se pudo generar el Excel' });
+  }
 });
 
 // ── Categorías ──
