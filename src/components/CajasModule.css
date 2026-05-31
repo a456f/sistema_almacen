@@ -905,3 +905,10 @@
 }
 .cat-item button:hover { background: #fee2e2; }
 .cat-empty { text-align: center; padding: 1.5rem; color: var(--text-muted); }
+
+/* Columna Fecha en tabla de productos */
+.prod-tr-fecha {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}

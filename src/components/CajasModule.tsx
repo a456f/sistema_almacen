@@ -12,6 +12,8 @@ interface Producto {
   marca: string | null; modelo: string | null; tipo: string | null;
   descripcion: string | null; uso: string | null; caracteristicas: string | null;
   estado: string;
+  fecha_registro?: string | null;
+  fecha_actualizacion?: string | null;
   imagenes?: ImagenItem[];
 }
 interface Caja {
@@ -621,6 +623,7 @@ const CajasModule = () => {
                         <th>S/N</th>
                         <th>Categoría</th>
                         <th>Estado</th>
+                        <th>Fecha</th>
                         <th></th>
                       </tr>
                     </thead>
@@ -656,6 +659,7 @@ const CajasModule = () => {
                               ) : '—'}
                             </td>
                             <td>{estadoBadge(p.estado)}</td>
+                            <td className="prod-tr-fecha">{p.fecha_registro ? new Date(p.fecha_registro).toLocaleString("es-PE", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—"}</td>
                             <td className="prod-tr-actions">
                               <button className="prod-edit-btn" onClick={() => abrirEditarProducto(p)} title="Ver y editar">{Icon.edit}</button>
                               <button className="prod-hist-btn" onClick={() => toggleHistorialProducto(p.id)} title="Ver historial">{Icon.history}</button>
@@ -664,7 +668,7 @@ const CajasModule = () => {
                           </tr>
                           {prodHistId === p.id && (
                             <tr className="prod-tr-hist">
-                              <td colSpan={7}>
+                              <td colSpan={8}>
                                 {prodHist.length === 0 ? (
                                   <p className="prod-hist-empty">Sin eventos registrados para este producto</p>
                                 ) : (
